@@ -43,19 +43,7 @@ jobs:
     outputs:
       npm_ready: ${{ steps.probe.outputs.npm_ready }}
       maven_ready: ${{ steps.probe.outputs.maven_ready }}
-      version: ${{ steps.version.outputs.version }}
     steps:
-      # Release versions are immutable in the registry, so a rerun that published
-      # the same coordinate would 409. run_number alone is stable across reruns of
-      # the same run, so the attempt is folded in as a semver prerelease, which
-      # both npm and Maven accept.
-      - id: version
-        run: |
-          v="0.1.${{ github.run_number }}"
-          [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "Artifact version: \`$v\`" >> "$GITHUB_STEP_SUMMARY"
-
       - id: probe
         run: |
           probe() {  # probe <url> -> "true" only if a package API really answered
@@ -79,20 +67,34 @@ jobs:
               *)   echo "false" ;;
             esac
           }
-          npm_ready="$(probe "https://$REGISTRY/npm/$NPM_PROJECT/")"
-          maven_ready="$(probe "https://$REGISTRY/maven/$MAVEN_PROJECT/")"
+
+          # What the probe observed is reported alongside the verdict, because
+          # "not ready" has several possible causes and the raw status is what
+          # tells them apart: 200 + text/html is the routing gap, 000 is a
+          # timeout, 4xx/5xx JSON is the registry rejecting the request.
+          observe() { curl -sS --connect-timeout 10 --max-time 30 \
+            -o /dev/null -w '%{http_code} %{content_type}' "$1" || echo '000 (no response)'; }
+
+          npm_url="https://$REGISTRY/npm/$NPM_PROJECT/"
+          maven_url="https://$REGISTRY/maven/$MAVEN_PROJECT"
+          npm_ready="$(probe "$npm_url")";     npm_obs="$(observe "$npm_url")"
+          maven_ready="$(probe "$maven_url")"; maven_obs="$(observe "$maven_url")"
           echo "npm_ready=$npm_ready"   >> "$GITHUB_OUTPUT"
           echo "maven_ready=$maven_ready" >> "$GITHUB_OUTPUT"
 
           {
-            echo "| Endpoint | Reachable |"
-            echo "|---|---|"
-            echo "| \`https://$REGISTRY/npm/$NPM_PROJECT/\` | $npm_ready |"
-            echo "| \`https://$REGISTRY/maven/$MAVEN_PROJECT\` | $maven_ready |"
+            echo "| Endpoint | Ready | Observed |"
+            echo "|---|---|---|"
+            echo "| \`$npm_url\` | $npm_ready | \`$npm_obs\` |"
+            echo "| \`$maven_url\` | $maven_ready | \`$maven_obs\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint returned HTML - the registry is not routing /npm/ to core. Publishing is skipped; see docs/00-environment.md"
-          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint returned HTML - the registry is not routing /maven/ to core. Publishing is skipped; see docs/00-environment.md"
+          # Deliberately not naming a single cause: the probe also fails on a
+          # timeout or a JSON error, and pointing operators at the routing fix for
+          # an unrelated outage wastes their time. The table above carries the
+          # observed status and content type.
+          [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped; docs/00-environment.md covers the routing case."
+          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped; docs/00-environment.md covers the routing case."
 
   # ---------------------------------------------------------------------------
   # Maven: resolve every dependency THROUGH the registry, then publish INTO it.
@@ -100,17 +102,29 @@ jobs:
   maven:
     needs: preflight
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         working-directory: apps/todo-api
     steps:
-      - uses: actions/checkout@v4
+      # Computed here rather than in preflight. "Re-run failed jobs" bumps
+      # github.run_attempt but does NOT re-run a job that already succeeded, so a
+      # version carried on a preflight output would keep attempt 1's value and the
+      # rerun would republish an immutable coordinate and get a 409. Computing it
+      # in the publishing job means it always reflects the current attempt.
+      - id: version
+        run: |
+          v="0.1.${{ github.run_number }}"
+          [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The checkout token is not needed after clone, and the build steps below
           # run repository-controlled Maven, npm and Docker input.
           persist-credentials: false
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           java-version: '21'
           distribution: temurin
@@ -130,16 +144,23 @@ jobs:
           # serve a full tree. Maven proxy cold fetches could not be reproduced at
           # all (see docs/04-maven.md), so a failure here falls back rather than
           # blocking the build.
+          # The settings file that actually worked is recorded, so the publish
+          # step below resolves its own plugins the same way. Publishing through a
+          # mirror that just failed would fail again on a cold runner.
           if [ "${{ needs.preflight.outputs.maven_ready }}" = "true" ]; then
             # mirrorOf=* in .mvn/settings.xml sends dependencies AND plugins
             # through the registry's proxy cache.
             if mvn -B -s .mvn/settings.xml verify; then
+              echo "settings=.mvn/settings.xml" >> "$GITHUB_ENV"
               exit 0
             fi
             echo "::warning::Build through the registry failed; retrying against Maven Central. See docs/04-maven.md"
           else
             echo "::notice::Building against Maven Central - the registry's Maven endpoint is unreachable."
           fi
+          # settings-upstream.xml keeps the <server> credentials, so `deploy` still
+          # authenticates against distributionManagement; only resolution changes.
+          echo "settings=.mvn/settings-upstream.xml" >> "$GITHUB_ENV"
           mvn -B verify
 
       - name: Publish jar
@@ -150,9 +171,9 @@ jobs:
         run: |
           # Release versions are immutable in Harbor, so a rerun of the same
           # version is a 409. Version by run number to keep reruns meaningful.
-          mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ needs.preflight.outputs.version }}" -DgenerateBackupPoms=false
-          mvn -B -s .mvn/settings.xml deploy -DskipTests
-          echo "Published \`com.containerregistry.todo:todo-api:${{ needs.preflight.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          mvn -B -s "$settings" versions:set -DnewVersion="${{ steps.version.outputs.version }}" -DgenerateBackupPoms=false
+          mvn -B -s "$settings" deploy -DskipTests
+          echo "Published \`com.containerregistry.todo:todo-api:${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # npm: same shape - install through the registry, publish back into it.
@@ -160,17 +181,29 @@ jobs:
   npm:
     needs: preflight
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         working-directory: apps/todo-ui
     steps:
-      - uses: actions/checkout@v4
+      # Computed here rather than in preflight. "Re-run failed jobs" bumps
+      # github.run_attempt but does NOT re-run a job that already succeeded, so a
+      # version carried on a preflight output would keep attempt 1's value and the
+      # rerun would republish an immutable coordinate and get a 409. Computing it
+      # in the publishing job means it always reflects the current attempt.
+      - id: version
+        run: |
+          v="0.1.${{ github.run_number }}"
+          [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The checkout token is not needed after clone, and the build steps below
           # run repository-controlled Maven, npm and Docker input.
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
@@ -214,9 +247,9 @@ jobs:
       - name: Publish package
         if: needs.preflight.outputs.npm_ready == 'true' && inputs.publish
         run: |
-          npm version "${{ needs.preflight.outputs.version }}" --no-git-tag-version
+          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
           npm publish
-          echo "Published \`todomvc-todo-ui@${{ needs.preflight.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published \`todomvc-todo-ui@${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # Container images: the part that works on any Harbor, keyless.
@@ -232,7 +265,7 @@ jobs:
           - app: todo-ui
             context: apps/todo-ui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The checkout token is not needed after clone, and the build steps below
           # run repository-controlled Maven, npm and Docker input.
@@ -261,12 +294,12 @@ jobs:
           printf '%s' "$HARBOR_PASSWORD" \
             | docker login "$REGISTRY" -u "$HARBOR_USERNAME" --password-stdin
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       # Route the in-image dependency downloads through the registry too, but only
       # when preflight found those endpoints reachable. Otherwise the defaults baked
       # into the Dockerfiles resolve from upstream.
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
           push: ${{ inputs.publish }}
@@ -287,7 +320,7 @@ jobs:
     if: inputs.publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The checkout token is not needed after clone, and the build steps below
           # run repository-controlled Maven, npm and Docker input.
@@ -320,8 +353,8 @@ jobs:
           always-auth=true
           //$REGISTRY/npm/$NPM_PROJECT/:_auth=$auth
           EOF
-          npm view "todomvc-todo-ui@${{ needs.preflight.outputs.version }}"
-          npm pack "todomvc-todo-ui@${{ needs.preflight.outputs.version }}"
+          npm view "todomvc-todo-ui@${{ needs.npm.outputs.version }}"
+          npm pack "todomvc-todo-ui@${{ needs.npm.outputs.version }}"
 
       - name: Resolve the Maven artifact back
         if: needs.preflight.outputs.maven_ready == 'true'
@@ -334,4 +367,4 @@ jobs:
           mvn -B -s apps/todo-api/.mvn/settings.xml \
             -Dmaven.repo.local="$(mktemp -d)" \
             dependency:get \
-            -Dartifact="com.containerregistry.todo:todo-api:${{ needs.preflight.outputs.version }}"
+            -Dartifact="com.containerregistry.todo:todo-api:${{ needs.maven.outputs.version }}"

@@ -16,6 +16,11 @@ permissions:
 
 jobs:
   pipeline:
+    # workflow_dispatch lets a maintainer pick any ref, which would run that
+    # branch's build code with id-token: write and publish: true and defeat the
+    # whole point of splitting the workflows. The push trigger is already
+    # main-only; this guard is what constrains the manual path.
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/_pipeline.yml
     permissions:
       contents: read
