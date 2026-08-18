@@ -69,9 +69,10 @@ jobs:
 ```
 
 ```yaml
-# publish.yml, on: push to main
+# publish.yml, on: push to main + workflow_dispatch
 jobs:
   pipeline:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/_pipeline.yml
     permissions:
       contents: read
@@ -80,6 +81,12 @@ jobs:
       publish: true
 ```
 
+The `if` is not decoration. `workflow_dispatch` lets a maintainer choose any ref,
+so without it someone could run an unmerged branch's build code with
+`id-token: write` and `publish: true`, which is exactly the boundary the split
+exists to draw. The push trigger is already main-only; the guard constrains the
+manual path.
+
 A called workflow can never hold more than its caller granted, so on a pull
 request the token endpoint is not reachable from any step, whatever the branch's
 build scripts try. `_pipeline.yml` deliberately declares no `permissions` block
@@ -87,6 +94,20 @@ of its own; declaring one would fail the run rather than elevate it.
 
 Everything inside the pipeline keys off the `publish` input rather than the event
 name, so the two paths cannot drift apart.
+
+## Pinned actions
+
+Every third-party action is pinned to a full commit SHA with the version in a
+trailing comment:
+
+```yaml
+- uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+```
+
+A tag is a mutable pointer. In a publish run the Docker actions execute after
+`docker login`, so a moved tag would run unreviewed code on a runner that is
+holding a registry credential. Pinning costs a dependency-update job later, which
+is the right trade here.
 
 ## Environment
 
@@ -102,17 +123,32 @@ One place to repoint the whole repository at a different registry.
 
 ## Artifact versions
 
-`preflight` computes the version every job publishes under:
+Release versions are immutable in the registry, so every run has to publish a
+coordinate it has not used before:
 
 ```bash
 v="0.1.${{ github.run_number }}"
 [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
 ```
 
-Release versions are immutable in the registry. `run_number` does not change when
-you press "re-run", so a rerun would try to publish a coordinate that already
-exists and fail with a 409. Folding the attempt in as a semver prerelease keeps
-reruns publishable, and both npm and Maven accept the form.
+`run_number` does not change when you press "re-run", so the attempt is folded in
+as a semver prerelease, which both npm and Maven accept.
+
+This is computed **inside each publishing job**, not once in `preflight`, and the
+reason is worth knowing if you copy the pattern. "Re-run failed jobs" increments
+`github.run_attempt` but does not re-run a job that already succeeded. A version
+carried on a `preflight` output would therefore still hold attempt 1's value on
+attempt 2, and the rerun would republish an immutable coordinate and get a 409,
+which is the exact failure the versioning was meant to avoid.
+
+Each publisher exposes what it used as a job output, and `verify` reads them
+separately, so re-running only the npm job does not change the coordinate the
+Maven job already published:
+
+```yaml
+npm view "todomvc-todo-ui@${{ needs.npm.outputs.version }}"
+mvn dependency:get -Dartifact="...:${{ needs.maven.outputs.version }}"
+```
 
 ## `preflight`
 
