@@ -114,6 +114,9 @@ jobs:
       # rerun would republish an immutable coordinate and get a 409. Computing it
       # in the publishing job means it always reflects the current attempt.
       - id: version
+        # working-directory is overridden because the job default points into the
+        # app directory, which does not exist until checkout has run.
+        working-directory: .
         run: |
           v="0.1.${{ github.run_number }}"
           [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
@@ -193,6 +196,9 @@ jobs:
       # rerun would republish an immutable coordinate and get a 409. Computing it
       # in the publishing job means it always reflects the current attempt.
       - id: version
+        # working-directory is overridden because the job default points into the
+        # app directory, which does not exist until checkout has run.
+        working-directory: .
         run: |
           v="0.1.${{ github.run_number }}"
           [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
