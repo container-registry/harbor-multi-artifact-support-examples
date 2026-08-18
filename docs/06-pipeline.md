@@ -243,13 +243,16 @@ what supplies credentials, via the `<server>` entry whose id matches. Dropping t
 Publishing sets the version first:
 
 ```bash
-mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ needs.preflight.outputs.version }}" -DgenerateBackupPoms=false
-mvn -B -s .mvn/settings.xml deploy -DskipTests
+mvn -B -s "$settings" versions:set -DnewVersion="${{ steps.version.outputs.version }}" -DgenerateBackupPoms=false
+mvn -B -s "$settings" deploy -DskipTests
 ```
 
-The version comes from `preflight` so every job publishes the same coordinate.
-See [Artifact versions](#artifact-versions) for why the run attempt is part of it.
-Details on Maven immutability in [04-maven.md](04-maven.md).
+Two things carry over from the build step above. `$settings` is whichever settings
+file actually resolved, so a publish never goes through a mirror that just failed.
+`steps.version.outputs.version` is this job's own version step, not a shared one;
+see [Artifact versions](#artifact-versions) for why it is computed per publisher
+rather than once in `preflight`. Details on Maven immutability in
+[04-maven.md](04-maven.md).
 
 Publishing is gated on `inputs.publish`: pull requests build and resolve, but do
 not write to the registry.

@@ -72,8 +72,17 @@ jobs:
           # "not ready" has several possible causes and the raw status is what
           # tells them apart: 200 + text/html is the routing gap, 000 is a
           # timeout, 4xx/5xx JSON is the registry rejecting the request.
-          observe() { curl -sS --connect-timeout 10 --max-time 30 \
-            -o /dev/null -w '%{http_code} %{content_type}' "$1" || echo '000 (no response)'; }
+          # curl still emits its -w line when the connection fails, so a bare
+          # `|| echo` would append the fallback to it and record two statuses.
+          observe() {
+            local out
+            if out="$(curl -sS --connect-timeout 10 --max-time 30 \
+                       -o /dev/null -w '%{http_code} %{content_type}' "$1" 2>/dev/null)"; then
+              printf '%s' "$out"
+            else
+              printf 'no response (connect or timeout)'
+            fi
+          }
 
           npm_url="https://$REGISTRY/npm/$NPM_PROJECT/"
           maven_url="https://$REGISTRY/maven/$MAVEN_PROJECT"
