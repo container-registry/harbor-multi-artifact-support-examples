@@ -10,28 +10,52 @@ This page walks it job by job.
 flowchart LR
     P[preflight] --> M[maven]
     P --> N[npm]
-    I[images]
+    P --> I[images]
     M --> V[verify]
     N --> V
     I --> V
     P --> V
 ```
 
-`images` has no dependency on `preflight`, because OCI push does not depend on
-the package endpoints being routed.
+`images` needs `preflight` as well. The push itself does not depend on the
+package endpoints, but the two Dockerfiles resolve dependencies during the build,
+so they take the same routing decision as the `maven` and `npm` jobs.
 
 ## Top of the file
 
 ```yaml
 permissions:
-  contents: read
-  id-token: write        # required to mint the GitHub OIDC token
+  contents: read           # workflow scope: no token minting here
 ```
 
-`id-token: write` is the permission that allows `core.getIDToken()` to work.
-Without it the token request fails and every job that authenticates dies at the
-first step. It is not granted by default, and it is the only permission this
-workflow needs beyond reading the repository.
+`id-token: write` is what allows `core.getIDToken()` to work. Without it the token
+request fails and every job that authenticates dies at its first step. It is not
+granted by default.
+
+It is granted **per job**, not at workflow scope, so a job that never mints a
+credential cannot request one:
+
+```yaml
+  maven:
+    permissions:
+      contents: read
+      id-token: write     # mints the registry credential
+```
+
+`preflight` gets no such grant, since all it does is a `curl` against public URLs.
+
+### Nothing is minted on a pull request
+
+Every minting step is additionally gated on `github.event_name != 'pull_request'`.
+
+The reason is that the jobs run build code from the branch under review: Maven
+plugins, npm lifecycle scripts, a Dockerfile. If a credential were minted before
+that code ran, a pull request could read it out of the runner and use the robot's
+push rights. Nothing is published from a pull request anyway, so there is nothing
+for a pull request to authenticate for.
+
+A pull request therefore still builds both apps and both images, and still runs
+the preflight probe. It just never holds a registry credential.
 
 ```yaml
 env:
@@ -129,7 +153,8 @@ build and resolve through the registry but do not write to it.
 Same shape. The authentication step is the one worth reading:
 
 ```bash
-auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 -w0)"
+# base64 -w0 is GNU-only; macOS needs -b0. Piping through tr works on both.
+auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
 echo "::add-mask::$auth"
 echo "//$REGISTRY/npm/$NPM_PROJECT/:_auth=$auth" >> .npmrc
 ```
@@ -151,8 +176,22 @@ where both go.
 
 ## `images`
 
-A matrix over the two apps. No `needs: preflight`, because `/v2/` is routed
-everywhere.
+A matrix over the two apps. It takes `needs: preflight` so the in-image
+dependency resolution can be pointed at the registry only when the endpoints
+answer; the push to `/v2/` itself works regardless.
+
+The Dockerfiles default to upstream registries and the job passes a build-arg to
+override that:
+
+```yaml
+build-args: |
+  ${{ matrix.app == 'todo-api' && needs.preflight.outputs.maven_ready == 'true' && 'MAVEN_SETTINGS=.mvn/settings.xml' || '' }}
+```
+
+Note that the build stage receives no registry credentials. `docker build` does
+not inherit the job's environment, so dependency resolution inside the image
+relies on the package projects being **public**. Keep them public, or pass
+credentials in explicitly with build secrets.
 
 ```bash
 printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u "$HARBOR_USERNAME" --password-stdin

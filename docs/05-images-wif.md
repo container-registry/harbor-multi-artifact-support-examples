@@ -99,7 +99,8 @@ into an `_auth` string, and that string is a credential too, so it is masked
 explicitly:
 
 ```bash
-auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 -w0)"
+# base64 -w0 is GNU-only; macOS needs -b0. Piping through tr works on both.
+auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
 echo "::add-mask::$auth"
 ```
 

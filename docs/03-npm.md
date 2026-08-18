@@ -41,7 +41,8 @@ Harbor accepts **HTTP Basic** on the npm endpoint. In `.npmrc` that is the `_aut
 key, which holds `base64("username:password")`:
 
 ```bash
-auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 -w0)"
+# base64 -w0 is GNU-only; macOS needs -b0. Piping through tr works on both.
+auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
 echo "//8gcr.container-registry.dev/npm/todomvc-npm/:_auth=$auth" >> .npmrc
 ```
 

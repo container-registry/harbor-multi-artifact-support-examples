@@ -16,7 +16,11 @@ ARG MAVEN_SETTINGS=.mvn/settings-upstream.xml
 
 WORKDIR /build
 
-# Copy the poms first so the dependency layer is cached independently of the sources.
+# Copy the poms before the sources. This only orders the COPY layers; the single
+# RUN below is still invalidated by any source edit, so dependencies are
+# re-resolved on every source change. Splitting the resolve into its own RUN would
+# fix that, at the cost of relying on dependency:go-offline, which under-resolves
+# for some plugins. For a demo build the simpler form is the better trade.
 COPY pom.xml .
 COPY .mvn/ .mvn/
 COPY src/ src/
