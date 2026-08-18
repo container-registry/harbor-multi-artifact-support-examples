@@ -60,7 +60,7 @@ die()  { printf '    \033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 post() { # post <path> <json> <what>
   local code body
   body="$(mktemp)"
-  code="$(curl -sS "${AUTH[@]}" "${JSON[@]}" -X POST "$API$1" -d "$2" -o "$body" -w '%{http_code}')"
+  code="$(curl -qsS "${AUTH[@]}" "${JSON[@]}" -X POST "$API$1" -d "$2" -o "$body" -w '%{http_code}')"
   case "$code" in
     201) ok "$3 created" ;;
     409) ok "$3 already exists" ;;
@@ -72,7 +72,7 @@ post() { # post <path> <json> <what>
 put() { # put <path> <json> <what>
   local code body
   body="$(mktemp)"
-  code="$(curl -sS "${AUTH[@]}" "${JSON[@]}" -X PUT "$API$1" -d "$2" -o "$body" -w '%{http_code}')"
+  code="$(curl -qsS "${AUTH[@]}" "${JSON[@]}" -X PUT "$API$1" -d "$2" -o "$body" -w '%{http_code}')"
   case "$code" in
     200) ok "$3" ;;
     *)   warn "$3 -> HTTP $code: $(cat "$body")"; rm -f "$body"; return 1 ;;
@@ -81,7 +81,7 @@ put() { # put <path> <json> <what>
 }
 
 id_of() { # id_of <path> <jq-ish name filter>
-  curl -sS "${AUTH[@]}" "$API$1" |
+  curl -qsS "${AUTH[@]}" "$API$1" |
     python3 -c "import sys,json;print(next((str(o['id']) for o in json.load(sys.stdin) if o.get('name')=='$2'),''))"
 }
 
@@ -89,7 +89,7 @@ id_of() { # id_of <path> <jq-ish name filter>
 # is what this script would have created, and stop with instructions when it is
 # not, rather than reporting success over a setup that cannot work.
 assert_registry() { # assert_registry <name> <expected type> <expected url>
-  curl -sS "${AUTH[@]}" "$API/registries" | NAME="$1" TYPE="$2" URL="$3" python3 -c "
+  curl -qsS "${AUTH[@]}" "$API/registries" | NAME="$1" TYPE="$2" URL="$3" python3 -c "
 import json,os,sys
 name,typ,url=os.environ['NAME'],os.environ['TYPE'],os.environ['URL']
 r=next((x for x in json.load(sys.stdin) if x.get('name')==name),None)
@@ -102,8 +102,21 @@ if bad: sys.exit('registry '+name+': '+'; '.join(bad)+'. Delete it and re-run.')
   ok "$1 verified (type=$2)"
 }
 
+assert_idp() { # assert_idp <name> <expected issuer>
+  curl -qsS "${AUTH[@]}" "$API/federated-idps" | NAME="$1" ISS="$2" python3 -c "
+import json,os,sys
+name,iss=os.environ['NAME'],os.environ['ISS']
+d=next((x for x in json.load(sys.stdin) if x.get('name')==name),None)
+if d is None: sys.exit('identity provider '+name+' not found')
+if d.get('issuer')!=iss:
+    sys.exit('identity provider '+name+': issuer is '+str(d.get('issuer'))+
+             ', expected '+iss+'. Delete it and re-run.')
+" || { die "$1 does not match the expected configuration"; return 1; }
+  ok "$1 verified (issuer=$2)"
+}
+
 assert_project() { # assert_project <name> <expected registry id>
-  curl -sS "${AUTH[@]}" "$API/projects/$1" | NAME="$1" RID="$2" python3 -c "
+  curl -qsS "${AUTH[@]}" "$API/projects/$1" | NAME="$1" RID="$2" python3 -c "
 import json,os,sys
 name,rid=os.environ['NAME'],os.environ['RID']
 p=json.load(sys.stdin)
@@ -120,7 +133,7 @@ if bad:
 }
 
 say "Target: $HARBOR_URL (audience: $AUDIENCE)"
-curl -fsS "${AUTH[@]}" "$API/users/current" >/dev/null || die "cannot authenticate as $HARBOR_USER"
+curl -qfsS "${AUTH[@]}" "$API/users/current" >/dev/null || die "cannot authenticate as $HARBOR_USER"
 ok "authenticated"
 
 # ---------------------------------------------------------------------------
@@ -174,6 +187,7 @@ post /federated-idps '{
 
 IDP_ID="$(id_of /federated-idps github-actions)"
 [ -n "$IDP_ID" ] || die "federated IdP missing"
+assert_idp github-actions https://token.actions.githubusercontent.com
 ok "IdP id=$IDP_ID"
 
 # ---------------------------------------------------------------------------
@@ -191,7 +205,7 @@ existing_projects() {
   for n in todomvc todomvc-npm todomvc-maven; do
     # A transport error or a 5xx is not the same as "absent". Treating it as
     # absent would silently provision a robot with too few grants.
-    code="$(curl -sS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "$API/projects/$n")" ||
+    code="$(curl -qsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "$API/projects/$n")" ||
       die "cannot reach $API/projects/$n"
     case "$code" in
       200) names+=("$n") ;;
@@ -216,7 +230,7 @@ ok "granting on: $(echo "$PROJECTS" | tr '\n' ' ')"
 ROBOT_BODY="{\"name\":\"todomvc-ci\",\"description\":\"Keyless CI robot (GitHub Actions WIF)\",\"level\":\"system\",\"duration\":-1,\"federatedidp_id\":$IDP_ID,\"permissions\":$PERMS}"
 post /robots "$ROBOT_BODY" "robot todomvc-ci" || true
 
-ROBOT_ID="$(curl -sS "${AUTH[@]}" "$API/robots" |
+ROBOT_ID="$(curl -qsS "${AUTH[@]}" "$API/robots" |
   python3 -c "import sys,json;print(next((str(r['id']) for r in json.load(sys.stdin) if r['name'] in ('robot_todomvc-ci','todomvc-ci')),''))")"
 [ -n "$ROBOT_ID" ] || die "robot missing"
 
@@ -226,7 +240,7 @@ ROBOT_ID="$(curl -sS "${AUTH[@]}" "$API/robots" |
 # The update must carry the robot's STORED name and level. Harbor prefixes system
 # robots with "robot_", so echoing back the name that was requested at creation
 # time is rejected with "cannot update the level or name of robot".
-RECONCILE_BODY="$(curl -sS "${AUTH[@]}" "$API/robots/$ROBOT_ID" |
+RECONCILE_BODY="$(curl -qsS "${AUTH[@]}" "$API/robots/$ROBOT_ID" |
   PERMS="$PERMS" python3 -c "
 import json,os,sys
 r=json.load(sys.stdin)
