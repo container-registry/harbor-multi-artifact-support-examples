@@ -31,8 +31,17 @@ _host="${HARBOR_URL#*://}"          # strip scheme
 AUDIENCE="${AUDIENCE:-${_host%%/*}}"  # strip any path -> bare hostname
 
 API="$HARBOR_URL/api/v2.0"
-AUTH=(-u "$HARBOR_USER:$HARBOR_PASS")
 JSON=(-H 'Content-Type: application/json')
+
+# Credentials go in a mode-600 config file rather than on the curl command line.
+# Anything passed as -u is visible in the process list to every other user on the
+# host for the lifetime of the call, which would be an odd thing to do in a script
+# whose whole subject is not storing credentials.
+CURLRC="$(mktemp)"
+chmod 600 "$CURLRC"
+trap 'rm -f "$CURLRC"' EXIT
+printf 'user = "%s:%s"\n' "$HARBOR_USER" "$HARBOR_PASS" > "$CURLRC"
+AUTH=(--config "$CURLRC")
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
@@ -40,6 +49,9 @@ warn() { printf '    \033[33m!\033[0m %s\n' "$*"; }
 die()  { printf '    \033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
 # POST that tolerates "already exists" (409) so the script can be re-run.
+# A 409 means only that something with that name is there, not that it is
+# configured the way this script wants. Where that distinction matters the caller
+# reconciles afterwards rather than trusting the 409.
 post() { # post <path> <json> <what>
   local code body
   body="$(mktemp)"
@@ -47,6 +59,17 @@ post() { # post <path> <json> <what>
   case "$code" in
     201) ok "$3 created" ;;
     409) ok "$3 already exists" ;;
+    *)   warn "$3 -> HTTP $code: $(cat "$body")"; rm -f "$body"; return 1 ;;
+  esac
+  rm -f "$body"
+}
+
+put() { # put <path> <json> <what>
+  local code body
+  body="$(mktemp)"
+  code="$(curl -sS "${AUTH[@]}" "${JSON[@]}" -X PUT "$API$1" -d "$2" -o "$body" -w '%{http_code}')"
+  case "$code" in
+    200) ok "$3" ;;
     *)   warn "$3 -> HTTP $code: $(cat "$body")"; rm -f "$body"; return 1 ;;
   esac
   rm -f "$body"
@@ -112,24 +135,61 @@ ok "IdP id=$IDP_ID"
 # 4. Robot with no secret - authorised by token claims alone
 # ---------------------------------------------------------------------------
 say "Federated robot account"
-PERMS='[]'
-PERMS="$(python3 - "$HARBOR_URL" <<'PY'
+
+# Permissions are built from the projects that actually exist. On a registry
+# where the npm/Maven projects could not be created yet, the robot is created
+# with whatever is there and WIDENED on a later run once they appear. Creating it
+# once and trusting the 409 on re-runs would leave it permanently short of
+# push/pull on the package projects, and the CI publishes would then 401.
+existing_projects() {
+  local names=() n
+  for n in todomvc todomvc-npm todomvc-maven; do
+    if curl -sS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "$API/projects/$n" | grep -q '^200$'; then
+      names+=("$n")
+    fi
+  done
+  printf '%s\n' "${names[@]}"
+}
+
+PROJECTS="$(existing_projects)"
+[ -n "$PROJECTS" ] || die "none of the demo projects exist"
+PERMS="$(printf '%s\n' "$PROJECTS" | python3 -c "
 import json,sys
-acc=[{"resource":"repository","action":a} for a in ("push","pull")]
-acc+=[{"resource":"artifact","action":"read"},{"resource":"tag","action":"create"}]
-print(json.dumps([{"kind":"project","namespace":n,"access":acc}
-                  for n in ("todomvc","todomvc-npm","todomvc-maven")]))
-PY
-)"
-# Projects that do not exist yet are rejected, so fall back to whatever exists.
-if ! post /robots "{\"name\":\"todomvc-ci\",\"description\":\"Keyless CI robot (GitHub Actions WIF)\",\"level\":\"system\",\"duration\":-1,\"federatedidp_id\":$IDP_ID,\"permissions\":$PERMS}" "robot todomvc-ci"; then
-  warn "retrying with only the projects that exist"
-  post /robots "{\"name\":\"todomvc-ci\",\"description\":\"Keyless CI robot (GitHub Actions WIF)\",\"level\":\"system\",\"duration\":-1,\"federatedidp_id\":$IDP_ID,\"permissions\":[{\"kind\":\"project\",\"namespace\":\"todomvc\",\"access\":[{\"resource\":\"repository\",\"action\":\"push\"},{\"resource\":\"repository\",\"action\":\"pull\"},{\"resource\":\"artifact\",\"action\":\"read\"},{\"resource\":\"tag\",\"action\":\"create\"}]}]}" "robot todomvc-ci (todomvc only)" || true
-fi
+acc=[{'resource':'repository','action':a} for a in ('push','pull')]
+acc+=[{'resource':'artifact','action':'read'},{'resource':'tag','action':'create'}]
+names=[l.strip() for l in sys.stdin if l.strip()]
+print(json.dumps([{'kind':'project','namespace':n,'access':acc} for n in names]))
+")"
+ok "granting on: $(echo "$PROJECTS" | tr '\n' ' ')"
+
+ROBOT_BODY="{\"name\":\"todomvc-ci\",\"description\":\"Keyless CI robot (GitHub Actions WIF)\",\"level\":\"system\",\"duration\":-1,\"federatedidp_id\":$IDP_ID,\"permissions\":$PERMS}"
+post /robots "$ROBOT_BODY" "robot todomvc-ci" || true
 
 ROBOT_ID="$(curl -sS "${AUTH[@]}" "$API/robots" |
   python3 -c "import sys,json;print(next((str(r['id']) for r in json.load(sys.stdin) if r['name'] in ('robot_todomvc-ci','todomvc-ci')),''))")"
 [ -n "$ROBOT_ID" ] || die "robot missing"
+
+# Reconcile rather than assume. A 409 above only says the name is taken, not that
+# the robot grants what this script wants.
+#
+# The update must carry the robot's STORED name and level. Harbor prefixes system
+# robots with "robot_", so echoing back the name that was requested at creation
+# time is rejected with "cannot update the level or name of robot".
+RECONCILE_BODY="$(curl -sS "${AUTH[@]}" "$API/robots/$ROBOT_ID" |
+  PERMS="$PERMS" python3 -c "
+import json,os,sys
+r=json.load(sys.stdin)
+print(json.dumps({
+    'name': r['name'],
+    'level': r['level'],
+    'description': r.get('description') or '',
+    'duration': r.get('duration', -1),
+    'disable': r.get('disable', False),
+    'permissions': json.loads(os.environ['PERMS']),
+}))")"
+put "/robots/$ROBOT_ID" "$RECONCILE_BODY" "robot permissions reconciled" ||
+  warn "could not reconcile robot permissions; check them by hand before publishing"
+
 ok "robot id=$ROBOT_ID (no secret - it cannot be used without a valid OIDC token)"
 
 # ---------------------------------------------------------------------------
@@ -137,13 +197,22 @@ ok "robot id=$ROBOT_ID (no secret - it cannot be used without a valid OIDC token
 # ---------------------------------------------------------------------------
 # robot_id 0 = provider-wide rule, applied to every token from this IdP.
 # A rule bound to a robot id is what actually selects that robot.
+#
+# These are NOT tolerated failures. Without them the robot cannot be assumed by
+# any token, so a script that reported success while a rule was missing would
+# hand you a setup that fails only later, in CI, as an opaque 401.
 say "Claim rules"
 post "/federated-idps/$IDP_ID/claims" \
   "{\"rules\":[{\"identity_provider_id\":$IDP_ID,\"robot_id\":0,\"claim_path\":\"aud\",\"value\":\"$AUDIENCE\"}]}" \
-  "provider rule: aud = $AUDIENCE" || true
+  "provider rule: aud = $AUDIENCE" || die "could not install the aud claim rule"
 post "/federated-idps/$IDP_ID/claims" \
   "{\"rules\":[{\"identity_provider_id\":$IDP_ID,\"robot_id\":$ROBOT_ID,\"claim_path\":\"repository\",\"value\":\"$GITHUB_REPO\"}]}" \
-  "robot rule: repository = $GITHUB_REPO" || true
+  "robot rule: repository = $GITHUB_REPO" || die "could not install the repository claim rule"
+
+# Consider narrowing further for a production setup, for example a rule on
+# `ref` (refs/heads/main) or `workflow_ref`, so that only the publishing workflow
+# on the expected branch can assume this robot. Harbor requires every rule bound
+# to the robot to match, so added rules narrow rather than widen.
 
 say "Done"
 cat <<EOF
