@@ -1,0 +1,24 @@
+# Publish entry point: main and manual runs only.
+#
+# Code reaching this path has been merged, so granting `id-token: write` here is a
+# deliberate trust decision rather than an accident of workflow scope. This is the
+# only file in the repository that grants it.
+
+name: publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_pipeline.yml
+    permissions:
+      contents: read
+      id-token: write     # mints the short-lived registry credential
+    with:
+      publish: true

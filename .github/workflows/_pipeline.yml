@@ -1,0 +1,337 @@
+# The build and publish pipeline, called by build.yml (pull requests) and
+# publish.yml (main and manual runs).
+#
+# It is a reusable workflow so that the two entry points can differ in exactly one
+# thing that matters: the permissions they grant. A called workflow can never hold
+# more than its caller was given, so on a pull request `id-token: write` is simply
+# not available to any step, including the Maven, npm and Docker build code that
+# comes from the branch under review.
+#
+# Read docs/06-pipeline.md alongside this file.
+
+name: pipeline
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: Publish artifacts. Only ever true for trusted, already-merged code.
+        type: boolean
+        default: false
+
+# No permissions block here on purpose. A reusable workflow inherits what the
+# caller grants; declaring more would fail the run rather than elevate it.
+
+env:
+  REGISTRY: 8gcr.container-registry.dev
+  NPM_PROJECT: todomvc-npm
+  MAVEN_PROJECT: todomvc-maven
+  IMAGE_PROJECT: todomvc
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Is the registry's package support actually reachable?
+  #
+  # The npm and Maven endpoints are served by Harbor core, but a deployment can
+  # have the feature compiled in and still not route /npm/ and /maven/ to it.
+  # When that happens the request lands on the web UI and comes back as HTML,
+  # which npm reports as a baffling JSON parse error. Detecting it here turns a
+  # confusing mid-build failure into one clear line. See docs/00-environment.md.
+  # ---------------------------------------------------------------------------
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      npm_ready: ${{ steps.probe.outputs.npm_ready }}
+      maven_ready: ${{ steps.probe.outputs.maven_ready }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      # Release versions are immutable in the registry, so a rerun that published
+      # the same coordinate would 409. run_number alone is stable across reruns of
+      # the same run, so the attempt is folded in as a semver prerelease, which
+      # both npm and Maven accept.
+      - id: version
+        run: |
+          v="0.1.${{ github.run_number }}"
+          [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Artifact version: \`$v\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - id: probe
+        run: |
+          probe() {  # probe <url> -> "true" only if a package API really answered
+            # Bounded: an endpoint that accepts the connection and then never
+            # responds would otherwise hang preflight and with it every job that
+            # waits on its output.
+            read -r code ct <<<"$(curl -sS --connect-timeout 10 --max-time 30 \
+              -o /dev/null -w '%{http_code} %{content_type}' "$1" || echo '000 -')"
+
+            # The web UI answers 200 text/html for unrouted package paths, so the
+            # content type alone is not enough; a JSON error body is still an error.
+            case "$ct" in *text/html*) echo "false"; return ;; esac
+
+            # Only an anonymous 200 counts. A 401 would prove the endpoint is there,
+            # but the image builds resolve dependencies inside `docker build`, which
+            # gets no credentials, so routing them at a project that demands
+            # authentication would just move the failure. This demo keeps its
+            # package projects public; see docs/06-pipeline.md.
+            case "$code" in
+              200) echo "true"  ;;
+              *)   echo "false" ;;
+            esac
+          }
+          npm_ready="$(probe "https://$REGISTRY/npm/$NPM_PROJECT/")"
+          maven_ready="$(probe "https://$REGISTRY/maven/$MAVEN_PROJECT/")"
+          echo "npm_ready=$npm_ready"   >> "$GITHUB_OUTPUT"
+          echo "maven_ready=$maven_ready" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "| Endpoint | Reachable |"
+            echo "|---|---|"
+            echo "| \`https://$REGISTRY/npm/$NPM_PROJECT/\` | $npm_ready |"
+            echo "| \`https://$REGISTRY/maven/$MAVEN_PROJECT\` | $maven_ready |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint returned HTML - the registry is not routing /npm/ to core. Publishing is skipped; see docs/00-environment.md"
+          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint returned HTML - the registry is not routing /maven/ to core. Publishing is skipped; see docs/00-environment.md"
+
+  # ---------------------------------------------------------------------------
+  # Maven: resolve every dependency THROUGH the registry, then publish INTO it.
+  # ---------------------------------------------------------------------------
+  maven:
+    needs: preflight
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/todo-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - id: auth
+        if: needs.preflight.outputs.maven_ready == 'true' && inputs.publish
+        uses: ./.github/actions/8gcr-token
+        with:
+          audience: ${{ env.REGISTRY }}
+
+      - name: Build
+        env:
+          HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+        run: |
+          # Same reasoning as the npm job: a reachable endpoint is not proof it can
+          # serve a full tree. Maven proxy cold fetches could not be reproduced at
+          # all (see docs/04-maven.md), so a failure here falls back rather than
+          # blocking the build.
+          if [ "${{ needs.preflight.outputs.maven_ready }}" = "true" ]; then
+            # mirrorOf=* in .mvn/settings.xml sends dependencies AND plugins
+            # through the registry's proxy cache.
+            if mvn -B -s .mvn/settings.xml verify; then
+              exit 0
+            fi
+            echo "::warning::Build through the registry failed; retrying against Maven Central. See docs/04-maven.md"
+          else
+            echo "::notice::Building against Maven Central - the registry's Maven endpoint is unreachable."
+          fi
+          mvn -B verify
+
+      - name: Publish jar
+        if: needs.preflight.outputs.maven_ready == 'true' && inputs.publish
+        env:
+          HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+        run: |
+          # Release versions are immutable in Harbor, so a rerun of the same
+          # version is a 409. Version by run number to keep reruns meaningful.
+          mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ needs.preflight.outputs.version }}" -DgenerateBackupPoms=false
+          mvn -B -s .mvn/settings.xml deploy -DskipTests
+          echo "Published \`com.containerregistry.todo:todo-api:${{ needs.preflight.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # npm: same shape - install through the registry, publish back into it.
+  # ---------------------------------------------------------------------------
+  npm:
+    needs: preflight
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/todo-ui
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - id: auth
+        if: needs.preflight.outputs.npm_ready == 'true' && inputs.publish
+        uses: ./.github/actions/8gcr-token
+        with:
+          audience: ${{ env.REGISTRY }}
+
+      - name: Authenticate npm
+        if: needs.preflight.outputs.npm_ready == 'true' && inputs.publish
+        env:
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+        run: |
+          # Harbor accepts HTTP Basic via _auth. It does NOT accept _authToken,
+          # despite what the portal's Usage tab shows. The username is ignored.
+          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 -w0)"
+          echo "::add-mask::$auth"
+          echo "//$REGISTRY/npm/$NPM_PROJECT/:_auth=$auth" >> .npmrc
+
+      - name: Install dependencies
+        run: |
+          # Preflight only proves the endpoint answers, not that it can serve a
+          # whole dependency tree. The npm proxy cache currently returns packuments
+          # that omit versions it holds, which surfaces as ETARGET partway through
+          # an install (see docs/03-npm.md). Falling back keeps the build honest
+          # about where the packages came from instead of failing opaquely.
+          if [ "${{ needs.preflight.outputs.npm_ready }}" = "true" ]; then
+            if npm ci; then
+              exit 0
+            fi
+            echo "::warning::Install through the registry failed; retrying against npmjs.org. See docs/03-npm.md"
+            rm -rf node_modules
+          else
+            echo "::notice::Installing from npmjs.org - the registry's npm endpoint is unreachable."
+          fi
+          npm ci --registry=https://registry.npmjs.org
+
+      - run: npm run build
+
+      - name: Publish package
+        if: needs.preflight.outputs.npm_ready == 'true' && inputs.publish
+        run: |
+          npm version "${{ needs.preflight.outputs.version }}" --no-git-tag-version
+          npm publish
+          echo "Published \`todomvc-todo-ui@${{ needs.preflight.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Container images: the part that works on any Harbor, keyless.
+  # ---------------------------------------------------------------------------
+  images:
+    needs: preflight
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - app: todo-api
+            context: apps/todo-api
+          - app: todo-ui
+            context: apps/todo-ui
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
+
+      # Deliberately not run on pull_request. Everything after this step executes
+      # build code from the pull request, so minting a registry credential first
+      # would hand that credential to unreviewed code. Nothing is published from a
+      # pull request anyway, so there is nothing to authenticate for.
+      - id: auth
+        if: inputs.publish
+        uses: ./.github/actions/8gcr-token
+        with:
+          audience: ${{ env.REGISTRY }}
+
+      - name: Log in to the registry
+        if: inputs.publish
+        # No password is stored anywhere. The OIDC token minted seconds ago is
+        # the password, and it expires in minutes. It goes through the
+        # environment rather than the command line so it never appears in a
+        # process listing or in `set -x` output.
+        env:
+          HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+        run: |
+          printf '%s' "$HARBOR_PASSWORD" \
+            | docker login "$REGISTRY" -u "$HARBOR_USERNAME" --password-stdin
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Route the in-image dependency downloads through the registry too, but only
+      # when preflight found those endpoints reachable. Otherwise the defaults baked
+      # into the Dockerfiles resolve from upstream.
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: ${{ inputs.publish }}
+          provenance: false
+          build-args: |
+            ${{ matrix.app == 'todo-api' && needs.preflight.outputs.maven_ready == 'true' && 'MAVEN_SETTINGS=.mvn/settings.xml' || '' }}
+            ${{ matrix.app == 'todo-ui' && needs.preflight.outputs.npm_ready == 'true' && format('NPM_REGISTRY=https://{0}/npm/{1}/', env.REGISTRY, env.NPM_PROJECT) || '' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PROJECT }}/${{ matrix.app }}:latest
+
+  # ---------------------------------------------------------------------------
+  # Pull everything back on a clean runner. Publishing that is never read back
+  # is not proof of anything.
+  # ---------------------------------------------------------------------------
+  verify:
+    needs: [preflight, maven, npm, images]
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
+
+      - id: auth
+        uses: ./.github/actions/8gcr-token
+        with:
+          audience: ${{ env.REGISTRY }}
+
+      - name: Pull the images back
+        env:
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+        run: |
+          printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u jwt --password-stdin
+          for app in todo-api todo-ui; do
+            docker pull "$REGISTRY/$IMAGE_PROJECT/$app:${{ github.sha }}"
+          done
+
+      - name: Resolve the npm package back
+        if: needs.preflight.outputs.npm_ready == 'true'
+        env:
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+        run: |
+          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 -w0)"
+          echo "::add-mask::$auth"
+          dir="$(mktemp -d)" && cd "$dir"
+          cat > .npmrc <<EOF
+          registry=https://$REGISTRY/npm/$NPM_PROJECT/
+          always-auth=true
+          //$REGISTRY/npm/$NPM_PROJECT/:_auth=$auth
+          EOF
+          npm view "todomvc-todo-ui@${{ needs.preflight.outputs.version }}"
+          npm pack "todomvc-todo-ui@${{ needs.preflight.outputs.version }}"
+
+      - name: Resolve the Maven artifact back
+        if: needs.preflight.outputs.maven_ready == 'true'
+        env:
+          HARBOR_USERNAME: jwt
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+        run: |
+          # -Dmaven.repo.local forces a cold cache, so a hit proves the artifact
+          # really came back over the network.
+          mvn -B -s apps/todo-api/.mvn/settings.xml \
+            -Dmaven.repo.local="$(mktemp -d)" \
+            dependency:get \
+            -Dartifact="com.containerregistry.todo:todo-api:${{ needs.preflight.outputs.version }}"
