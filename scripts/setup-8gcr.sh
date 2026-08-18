@@ -40,7 +40,12 @@ JSON=(-H 'Content-Type: application/json')
 CURLRC="$(mktemp)"
 chmod 600 "$CURLRC"
 trap 'rm -f "$CURLRC"' EXIT
-printf 'user = "%s:%s"\n' "$HARBOR_USER" "$HARBOR_PASS" > "$CURLRC"
+# curl's config parser treats \ and " inside a quoted value as escapes, so a
+# password containing either would otherwise be read as something else.
+_cred="$HARBOR_USER:$HARBOR_PASS"
+_cred="${_cred//\\/\\\\}"
+_cred="${_cred//\"/\\\"}"
+printf 'user = "%s"\n' "$_cred" > "$CURLRC"
 AUTH=(--config "$CURLRC")
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
@@ -80,6 +85,40 @@ id_of() { # id_of <path> <jq-ish name filter>
     python3 -c "import sys,json;print(next((str(o['id']) for o in json.load(sys.stdin) if o.get('name')=='$2'),''))"
 }
 
+# A 409 from post() only means the name is taken. These check that what is there
+# is what this script would have created, and stop with instructions when it is
+# not, rather than reporting success over a setup that cannot work.
+assert_registry() { # assert_registry <name> <expected type> <expected url>
+  curl -sS "${AUTH[@]}" "$API/registries" | NAME="$1" TYPE="$2" URL="$3" python3 -c "
+import json,os,sys
+name,typ,url=os.environ['NAME'],os.environ['TYPE'],os.environ['URL']
+r=next((x for x in json.load(sys.stdin) if x.get('name')==name),None)
+if r is None: sys.exit('registry '+name+' not found')
+bad=[]
+if r.get('type')!=typ: bad.append('type is '+str(r.get('type'))+', expected '+typ)
+if r.get('url','').rstrip('/')!=url.rstrip('/'): bad.append('url is '+str(r.get('url'))+', expected '+url)
+if bad: sys.exit('registry '+name+': '+'; '.join(bad)+'. Delete it and re-run.')
+" || { die "$1 does not match the expected configuration"; return 1; }
+  ok "$1 verified (type=$2)"
+}
+
+assert_project() { # assert_project <name> <expected registry id>
+  curl -sS "${AUTH[@]}" "$API/projects/$1" | NAME="$1" RID="$2" python3 -c "
+import json,os,sys
+name,rid=os.environ['NAME'],os.environ['RID']
+p=json.load(sys.stdin)
+bad=[]
+if str(p.get('registry_id')) != rid:
+    bad.append('bound to registry '+str(p.get('registry_id'))+', expected '+rid)
+if (p.get('metadata') or {}).get('proxy_cache_allow_push') != 'true':
+    bad.append('proxy_cache_allow_push is not true')
+if bad:
+    sys.exit('project '+name+': '+'; '.join(bad)+
+             '. Both are fixed only at creation time, so delete the project and re-run.')
+" || { die "$1 does not match the expected configuration"; return 1; }
+  ok "$1 verified (proxy cache -> registry $2, publishing allowed)"
+}
+
 say "Target: $HARBOR_URL (audience: $AUDIENCE)"
 curl -fsS "${AUTH[@]}" "$API/users/current" >/dev/null || die "cannot authenticate as $HARBOR_USER"
 ok "authenticated"
@@ -95,6 +134,8 @@ NPM_REG_ID="$(id_of /registries npmjs)"
 MVN_REG_ID="$(id_of /registries maven-central)"
 [ -n "$NPM_REG_ID" ] || die "npm registry endpoint missing"
 [ -n "$MVN_REG_ID" ] || die "maven registry endpoint missing"
+assert_registry npmjs npm https://registry.npmjs.org
+assert_registry maven-central maven https://repo1.maven.org/maven2
 ok "npm endpoint id=$NPM_REG_ID, maven endpoint id=$MVN_REG_ID"
 
 # ---------------------------------------------------------------------------
@@ -104,12 +145,16 @@ ok "npm endpoint id=$NPM_REG_ID, maven endpoint id=$MVN_REG_ID"
 # host our own. It can only be set at creation time - a project created without
 # it cannot be updated later, it has to be deleted and recreated.
 say "Projects"
-if ! post /projects "{\"project_name\":\"todomvc-npm\",\"registry_id\":$NPM_REG_ID,\"metadata\":{\"public\":\"true\",\"proxy_cache_allow_push\":\"true\"}}" "project todomvc-npm"; then
+if post /projects "{\"project_name\":\"todomvc-npm\",\"registry_id\":$NPM_REG_ID,\"metadata\":{\"public\":\"true\",\"proxy_cache_allow_push\":\"true\"}}" "project todomvc-npm"; then
+  assert_project todomvc-npm "$NPM_REG_ID"
+else
   warn "npm proxy-cache project could not be created."
   warn "If the error says 'unsupported registry type npm', the core container is"
   warn "missing npm/maven in PERMITTED_REGISTRY_TYPES_FOR_PROXY_CACHE - see docs/00-environment.md."
 fi
-if ! post /projects "{\"project_name\":\"todomvc-maven\",\"registry_id\":$MVN_REG_ID,\"metadata\":{\"public\":\"true\",\"proxy_cache_allow_push\":\"true\"}}" "project todomvc-maven"; then
+if post /projects "{\"project_name\":\"todomvc-maven\",\"registry_id\":$MVN_REG_ID,\"metadata\":{\"public\":\"true\",\"proxy_cache_allow_push\":\"true\"}}" "project todomvc-maven"; then
+  assert_project todomvc-maven "$MVN_REG_ID"
+else
   warn "maven proxy-cache project could not be created - same cause as above."
 fi
 post /projects '{"project_name":"todomvc","metadata":{"public":"true"}}' "project todomvc (OCI images)" || true
@@ -142,11 +187,17 @@ say "Federated robot account"
 # once and trusting the 409 on re-runs would leave it permanently short of
 # push/pull on the package projects, and the CI publishes would then 401.
 existing_projects() {
-  local names=() n
+  local names=() n code
   for n in todomvc todomvc-npm todomvc-maven; do
-    if curl -sS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "$API/projects/$n" | grep -q '^200$'; then
-      names+=("$n")
-    fi
+    # A transport error or a 5xx is not the same as "absent". Treating it as
+    # absent would silently provision a robot with too few grants.
+    code="$(curl -sS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "$API/projects/$n")" ||
+      die "cannot reach $API/projects/$n"
+    case "$code" in
+      200) names+=("$n") ;;
+      404) ;;
+      *)   die "cannot inspect project $n (HTTP $code)" ;;
+    esac
   done
   printf '%s\n' "${names[@]}"
 }
@@ -188,7 +239,7 @@ print(json.dumps({
     'permissions': json.loads(os.environ['PERMS']),
 }))")"
 put "/robots/$ROBOT_ID" "$RECONCILE_BODY" "robot permissions reconciled" ||
-  warn "could not reconcile robot permissions; check them by hand before publishing"
+  die "could not reconcile robot permissions; publishing would fail with a 401 later"
 
 ok "robot id=$ROBOT_ID (no secret - it cannot be used without a valid OIDC token)"
 
