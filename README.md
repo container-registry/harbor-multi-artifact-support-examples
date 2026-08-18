@@ -29,13 +29,13 @@ npmjs.org and the package your pipeline published:
 
 | | |
 |---|---|
-| [00 — The registry this runs against](docs/00-environment.md) | What the target instance supports, how that was established, and what is currently blocked. **Read this first.** |
-| [01 — Concepts](docs/01-concepts.md) | Native hosting vs proxy cache, and how one project does both |
-| [02 — Registry setup](docs/02-harbor-setup.md) | Endpoints, projects, federated identity, secretless robot |
-| [03 — npm](docs/03-npm.md) | Install through the registry, publish into it |
-| [04 — Maven](docs/04-maven.md) | Resolve through the registry, deploy into it |
-| [05 — Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
-| [06 — The pipeline](docs/06-pipeline.md) | Annotated walkthrough of the workflow |
+| [00: The registry this runs against](docs/00-environment.md) | What the target instance supports, how that was established, and what is currently blocked. **Read this first.** |
+| [01: Concepts](docs/01-concepts.md) | Native hosting vs proxy cache, and how one project does both |
+| [02: Registry setup](docs/02-harbor-setup.md) | Endpoints, projects, federated identity, secretless robot |
+| [03: npm](docs/03-npm.md) | Install through the registry, publish into it |
+| [04: Maven](docs/04-maven.md) | Resolve through the registry, deploy into it |
+| [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
+| [06: The pipeline](docs/06-pipeline.md) | Annotated walkthrough of the workflow |
 
 ## Quick start
 

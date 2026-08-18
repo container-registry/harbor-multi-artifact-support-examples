@@ -17,7 +17,7 @@ $ curl -su admin:$PASS https://8gcr.container-registry.dev/api/v2.0/systeminfo
 | Capability | Status | How this was established |
 |---|---|---|
 | OCI container images | **working** | standard `/v2/` API, reachable |
-| Workload Identity Federation | **working** | `/api/v2.0/federated-idps` accepts providers, claim rules and secretless robots — all created by `scripts/setup-8gcr.sh` against the live instance |
+| Workload Identity Federation | **working** | `/api/v2.0/federated-idps` accepts providers, claim rules and secretless robots, all created by `scripts/setup-8gcr.sh` against the live instance |
 | npm + Maven code | **present in the running build** | see below |
 | npm + Maven proxy-cache endpoints | **created successfully** | `POST /api/v2.0/registries` with `"type":"npm"` / `"maven"` → `201`, both report `status: healthy` |
 | npm + Maven **usable end to end** | **blocked by two deployment-config gaps** | see [Known gaps](#known-gaps) |
@@ -62,7 +62,7 @@ $ strings core | grep -cE 'federatedidp|robotjwt|jwkscache'
 139                                        # WIF is in the same binary
 ```
 
-The portal ships the UI too — it is in a lazily-loaded chunk, which is why
+The portal ships the UI too. It is in a lazily-loaded chunk, which is why
 grepping `main.*.js` finds nothing:
 
 ```console
@@ -81,10 +81,10 @@ configuration.
 
 Two independent deployment-config issues stand between this instance and a
 working npm/Maven demo. Neither is a code defect; both are one-line changes in
-the GitOps repo. Neither is fixable from this repository — they need cluster or
+the GitOps repo. Neither is fixable from this repository; they need cluster or
 GitOps access.
 
-### Gap 1 — proxy-cache projects reject npm and Maven
+### Gap 1: proxy-cache projects reject npm and Maven
 
 ```console
 $ curl -su admin:$PASS -X POST https://8gcr.container-registry.dev/api/v2.0/projects \
@@ -113,7 +113,7 @@ The Compose deployment that ships with the feature sets the full list
 PERMITTED_REGISTRY_TYPES_FOR_PROXY_CACHE: docker-hub,harbor,azure-acr,ali-acr,aws-ecr,google-gcr,docker-registry,github-ghcr,jfrog-artifactory,npm,pypi,maven,cargo,go,go-sumdb,homebrew
 ```
 
-**Fix** — `templates/core.deployment.yaml:71` renders `.Values.core.extraEnv`
+**Fix.** `templates/core.deployment.yaml:71` renders `.Values.core.extraEnv`
 into `env:`, and `env` wins over `envFrom`, so this needs no chart change. In
 `harbor-next` `deploy/flux/8gcr-dev/helmrelease.yaml`, under the existing
 `values.core:` key:
@@ -128,7 +128,7 @@ into `env:`, and `env` wins over `envFrom`, so this needs no chart change. In
 The chart default should arguably be widened as well, so every deployment of a
 build that has the feature can actually use it.
 
-### Gap 2 — `/npm/` and `/maven/` are not routed to core
+### Gap 2: `/npm/` and `/maven/` are not routed to core
 
 ```console
 $ curl -su admin:$PASS -D- -o/dev/null https://8gcr.container-registry.dev/npm/library/-/whoami
@@ -155,14 +155,14 @@ location /npm/   { proxy_pass http://core:8080; proxy_send_timeout 900; proxy_re
 location /maven/ { proxy_pass http://core:8080; proxy_send_timeout 900; proxy_read_timeout 900; }
 ```
 
-Note that even the Compose config only covers npm and Maven — `/pypi/`,
+Note that even the Compose config only covers npm and Maven. `/pypi/`,
 `/cargo/`, `/go/` and `/homebrew/` are unreachable through the bundled proxy in
 every shipped deployment, although core implements them.
 
-**Fix (proper)** — add the package prefixes to the chart's ingress template
+**Fix (proper).** Add the package prefixes to the chart's ingress template
 alongside `/api/` and `/v2/`.
 
-**Fix (deployable now, no chart release)** — add a second Ingress to the Flux
+**Fix (deployable now, no chart release).** Add a second Ingress to the Flux
 bundle in `harbor-next` `deploy/flux/8gcr-dev/`, and reference it from
 `kustomization.yaml`. More specific prefixes win over the chart's `/`, so the
 two Ingresses coexist:
@@ -205,14 +205,14 @@ for this HelmRelease.
 # Gap 1
 ./scripts/setup-8gcr.sh          # todomvc-npm and todomvc-maven should now be created
 
-# Gap 2 — JSON, not HTML, is the success signal
+# Gap 2: JSON, not HTML, is the success signal
 curl -su admin:$PASS https://8gcr.container-registry.dev/npm/todomvc-npm/-/whoami
 ```
 
 ## A note on two things that look like evidence but are not
 
 **The provider dropdown is curated.** `GET /api/v2.0/replication/adapters`
-returns 14 entries with no npm or Maven — but it also omits `quay`, `gitlab`,
+returns 14 entries with no npm or Maven, but it also omits `quay`, `gitlab`,
 `dtr` and `native`, whose `init` symbols are equally present in the binary. The
 list is not a reflection of what is registered, and creating the endpoints via
 the API works regardless. Expect to create npm/Maven endpoints with `curl`, not
@@ -222,4 +222,4 @@ through the UI, until the list is widened.
 HTTP Basic (`_auth` in `.npmrc`); it does not honour `_authToken`. The portal's
 **Usage** tab currently emits an `_authToken` line
 (`src/portal/.../usage/usage.component.ts`), which will produce a 401. Use
-`_auth` — every example in this repository does.
+`_auth`, as every example in this repository does.
