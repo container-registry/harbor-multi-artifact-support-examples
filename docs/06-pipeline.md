@@ -2,9 +2,19 @@
 
 [← Images and WIF](05-images-wif.md) · [Concepts](01-concepts.md)
 
-[`.github/workflows/build.yml`](../.github/workflows/build.yml) builds both apps
-and publishes three kinds of artifact into one registry, with no stored secret.
-This page walks it job by job.
+Three files build both apps and publish three kinds of artifact into one
+registry, with no stored secret:
+
+| File | Trigger | Grants `id-token: write` |
+|---|---|---|
+| [`_pipeline.yml`](../.github/workflows/_pipeline.yml) | `workflow_call` | no, it inherits |
+| [`build.yml`](../.github/workflows/build.yml) | `pull_request` | **no** |
+| [`publish.yml`](../.github/workflows/publish.yml) | push to `main`, manual | yes |
+
+The work lives once, in the reusable `_pipeline.yml`. The two entry points differ
+in one thing that matters, and it is the reason for the split: what they are
+allowed to do. See [below](#why-the-split). This page walks the pipeline job by
+job.
 
 ```mermaid
 flowchart LR
@@ -21,41 +31,64 @@ flowchart LR
 package endpoints, but the two Dockerfiles resolve dependencies during the build,
 so they take the same routing decision as the `maven` and `npm` jobs.
 
-## Top of the file
+## Why the split
+
+A pull request runs code from the branch under review: Maven plugins, npm
+lifecycle scripts, `RUN` layers in a Dockerfile. If the job holding that code can
+mint a registry credential, then so can the code.
+
+The first version of this pipeline tried to solve that with a step condition:
 
 ```yaml
+# NOT sufficient
 permissions:
-  contents: read           # workflow scope: no token minting here
+  id-token: write
+steps:
+  - if: github.event_name != 'pull_request'
+    uses: ./.github/actions/8gcr-token
 ```
 
-`id-token: write` is what allows `core.getIDToken()` to work. Without it the token
-request fails and every job that authenticates dies at its first step. It is not
-granted by default.
+That does not work. Granting `id-token: write` puts `ACTIONS_ID_TOKEN_REQUEST_URL`
+and `ACTIONS_ID_TOKEN_REQUEST_TOKEN` into the job environment for **every** step,
+so any build script in the job can request a token itself with two lines of curl.
+Skipping the step that mints one changes nothing. A step condition is not a
+permission boundary; the job's permission set is.
 
-It is granted **per job**, not at workflow scope, so a job that never mints a
-credential cannot request one:
+The boundary has to be the grant, and permissions cannot be set from an
+expression. Hence two callers:
 
 ```yaml
-  maven:
+# build.yml, on: pull_request
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_pipeline.yml
+    permissions:
+      contents: read          # no id-token, at all
+    with:
+      publish: false
+```
+
+```yaml
+# publish.yml, on: push to main
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_pipeline.yml
     permissions:
       contents: read
-      id-token: write     # mints the registry credential
+      id-token: write         # the only grant in the repository
+    with:
+      publish: true
 ```
 
-`preflight` gets no such grant, since all it does is a `curl` against public URLs.
+A called workflow can never hold more than its caller granted, so on a pull
+request the token endpoint is not reachable from any step, whatever the branch's
+build scripts try. `_pipeline.yml` deliberately declares no `permissions` block
+of its own; declaring one would fail the run rather than elevate it.
 
-### Nothing is minted on a pull request
+Everything inside the pipeline keys off the `publish` input rather than the event
+name, so the two paths cannot drift apart.
 
-Every minting step is additionally gated on `github.event_name != 'pull_request'`.
-
-The reason is that the jobs run build code from the branch under review: Maven
-plugins, npm lifecycle scripts, a Dockerfile. If a credential were minted before
-that code ran, a pull request could read it out of the runner and use the robot's
-push rights. Nothing is published from a pull request anyway, so there is nothing
-for a pull request to authenticate for.
-
-A pull request therefore still builds both apps and both images, and still runs
-the preflight probe. It just never holds a registry credential.
+## Environment
 
 ```yaml
 env:
@@ -65,8 +98,21 @@ env:
   IMAGE_PROJECT: todomvc
 ```
 
-`REGISTRY` is used both as the hostname and as the OIDC audience, which is what
-ties the token to this registry. See [05-images-wif.md](05-images-wif.md).
+One place to repoint the whole repository at a different registry.
+
+## Artifact versions
+
+`preflight` computes the version every job publishes under:
+
+```bash
+v="0.1.${{ github.run_number }}"
+[ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
+```
+
+Release versions are immutable in the registry. `run_number` does not change when
+you press "re-run", so a rerun would try to publish a coordinate that already
+exists and fail with a 409. Folding the attempt in as a semver prerelease keeps
+reruns publishable, and both npm and Maven accept the form.
 
 ## `preflight`
 
@@ -82,20 +128,32 @@ equally unhelpful. The cause and the symptom look nothing alike, and this is the
 current state of `8gcr.container-registry.dev`
 ([00-environment.md](00-environment.md)).
 
-The probe checks the content type, not the status code:
+The probe checks the status and the content type, and bounds itself in time:
 
 ```bash
-probe() {  # "true" if a package API answered, "false" if the UI did
-  ct="$(curl -sS -o /dev/null -w '%{content_type}' "$1" || true)"
-  case "$ct" in
-    *text/html*|"") echo "false" ;;
-    *)              echo "true"  ;;
+probe() {  # "true" only if a package API really answered
+  read -r code ct <<<"$(curl -sS --connect-timeout 10 --max-time 30 \
+    -o /dev/null -w '%{http_code} %{content_type}' "$1" || echo '000 -')"
+  case "$ct" in *text/html*) echo "false"; return ;; esac
+  case "$code" in
+    200) echo "true"  ;;
+    *)   echo "false" ;;
   esac
 }
 ```
 
-A 200 with `text/html` is the failure. A 401 with `application/json` is a success
-as far as this probe is concerned, because it proves the request reached core.
+Three things it deliberately rejects:
+
+- **200 with `text/html`** is the routing failure above.
+- **A JSON error.** Checking only the content type would read a `404` or `500`
+  JSON body as a healthy endpoint and send the build at it.
+- **A 401.** That proves the endpoint is there, but the image builds resolve
+  dependencies inside `docker build`, which receives no credentials, so pointing
+  them at a project that demands authentication only moves the failure. This demo
+  keeps its package projects public.
+
+The timeouts matter because an endpoint can accept a connection and then never
+respond, which would hang `preflight` and with it every job waiting on it.
 
 The two outputs, `npm_ready` and `maven_ready`, gate the later jobs. When an
 endpoint is unreachable the workflow does not fail; it builds against the upstream
@@ -108,11 +166,15 @@ stack trace.
 
 ```yaml
 - id: auth
-  if: needs.preflight.outputs.maven_ready == 'true'
+  if: needs.preflight.outputs.maven_ready == 'true' && inputs.publish
   uses: ./.github/actions/8gcr-token
   with:
     audience: ${{ env.REGISTRY }}
 ```
+
+`inputs.publish` is false on a pull request, so nothing is minted there. That
+condition is a convenience, not the safeguard; the safeguard is that the calling
+workflow never granted the permission (see [Why the split](#why-the-split)).
 
 The composite action mints the OIDC token and returns it as
 `steps.auth.outputs.password`, with `steps.auth.outputs.username` fixed to `jwt`.
@@ -123,11 +185,20 @@ The build step branches on the probe:
 
 ```bash
 if [ "${{ needs.preflight.outputs.maven_ready }}" = "true" ]; then
-  mvn -B -s .mvn/settings.xml verify     # everything through the proxy cache
-else
-  mvn -B verify                          # straight to Maven Central
+  if mvn -B -s .mvn/settings.xml verify; then   # everything through the proxy cache
+    exit 0
+  fi
+  echo "::warning::Build through the registry failed; retrying against Maven Central."
 fi
+mvn -B verify                                    # straight to Maven Central
 ```
+
+Note the retry. A reachable endpoint is not proof it can serve a whole dependency
+tree, and Maven proxy cold fetches could not be reproduced at all
+([04-maven.md](04-maven.md#known-issue-cold-proxy-fetches-return-404)). Falling
+back keeps the build honest about where the packages came from instead of failing
+opaquely. The npm job does the same, for the packument defect in
+[03-npm.md](03-npm.md).
 
 The settings file is what redirects resolution, via `mirrorOf=*`, and it is also
 what supplies credentials, via the `<server>` entry whose id matches. Dropping the
@@ -136,17 +207,16 @@ what supplies credentials, via the `<server>` entry whose id matches. Dropping t
 Publishing sets the version first:
 
 ```bash
-mvn -B -s .mvn/settings.xml versions:set -DnewVersion="0.1.${{ github.run_number }}" -DgenerateBackupPoms=false
+mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ needs.preflight.outputs.version }}" -DgenerateBackupPoms=false
 mvn -B -s .mvn/settings.xml deploy -DskipTests
 ```
 
-Release versions are immutable in Harbor, so redeploying `0.1.0` on every run
-would be a conflict from the second run onward. `github.run_number` gives a
-monotonic version per run, so a rerun publishes something new and observable
-rather than colliding. Details in [04-maven.md](04-maven.md).
+The version comes from `preflight` so every job publishes the same coordinate.
+See [Artifact versions](#artifact-versions) for why the run attempt is part of it.
+Details on Maven immutability in [04-maven.md](04-maven.md).
 
-Publishing is also gated on `github.event_name != 'pull_request'`: pull requests
-build and resolve through the registry but do not write to it.
+Publishing is gated on `inputs.publish`: pull requests build and resolve, but do
+not write to the registry.
 
 ## `npm`
 
@@ -202,7 +272,7 @@ command line. A command line is visible in a process listing and in `set -x`
 output; stdin is not.
 
 ```yaml
-push: ${{ github.event_name != 'pull_request' }}
+push: ${{ inputs.publish }}
 provenance: false
 tags: |
   ${{ env.REGISTRY }}/${{ env.IMAGE_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
@@ -229,7 +299,7 @@ runner, mints a **new** token, and pulls all three artifact kinds.
 
 ```yaml
 needs: [preflight, maven, npm, images]
-if: github.event_name != 'pull_request'
+if: inputs.publish
 ```
 
 - **Images**: `docker login` with the fresh token, then `docker pull` by commit

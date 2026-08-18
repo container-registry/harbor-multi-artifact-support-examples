@@ -174,8 +174,19 @@ JSON
 secret to leak: the robot is unusable without a fresh, correctly-claimed token.
 
 A permission entry naming a project that does not exist is rejected, so create the
-projects first. The setup script handles this by retrying with only `todomvc` when
-the npm and Maven projects could not be created.
+projects first. The setup script checks which of the three projects exist and
+grants on that set, then **reconciles the robot with a `PUT` on every run**.
+
+The reconcile matters more than it looks. If the npm and Maven projects could not
+be created on the first run, the robot is created with `todomvc` alone. On a later
+run, once those projects exist, `POST /robots` returns 409 for the name that is
+already taken, so a script that stopped there would leave the robot permanently
+short of push on the package projects, and the pipeline would fail with a 401
+against projects that visibly exist.
+
+One quirk when reconciling: the update has to carry the robot's **stored** name.
+Harbor prefixes system robots with `robot_`, so sending back the name you asked
+for at creation time is rejected with `cannot update the level or name of robot`.
 
 The API returns the robot's id, and the account appears as `robot_todomvc-ci`.
 
