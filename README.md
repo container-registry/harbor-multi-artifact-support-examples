@@ -105,9 +105,11 @@ docs/               The guide.
 
 This repository documents what was actually observed, including what does not work yet.
 Two deployment-config gaps currently stop the npm and Maven halves from running against
-the hosted instance, and one npm proxy-cache defect makes installing a full dependency
-tree unreliable. All three are written up with reproductions in
-[docs/00-environment.md](docs/00-environment.md) and [docs/03-npm.md](docs/03-npm.md).
+the hosted instance. Beyond those, npm proxy caching returns incomplete package indexes,
+and Maven proxy caching could not be reproduced from a clean instance at all. Each is
+written up with its reproduction and with what was ruled out, in
+[docs/00-environment.md](docs/00-environment.md), [docs/03-npm.md](docs/03-npm.md) and
+[docs/04-maven.md](docs/04-maven.md).
 
 The pipeline detects the gaps at runtime and degrades to upstream registries with a
 warning rather than failing in a way that looks like your mistake.

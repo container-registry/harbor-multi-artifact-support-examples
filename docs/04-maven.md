@@ -83,10 +83,16 @@ deploy fails with a 401 that names a repository you thought you had configured.
 
 ## Resolving through the proxy
 
-`mvn verify` pulls the entire Spring Boot dependency tree through the project.
-Artifacts come back byte-identical to upstream. For example,
+> **Known issue: the Maven proxy cache could not be reproduced from a clean
+> instance.** See [below](#known-issue-cold-proxy-fetches-return-404) before you
+> rely on this. Everything else on this page (client configuration, publishing,
+> resolving your own artifacts) is unaffected.
+
+When it works, `mvn verify` pulls the entire Spring Boot dependency tree through
+the project and artifacts come back byte-identical to upstream. For example,
 `spring-boot-dependencies-3.5.12.pom` is 97521 bytes both from Maven Central and
-through `todomvc-maven`.
+through `todomvc-maven`, and Maven logs the fetch as
+`Downloaded from 8gcr: .../spring-boot-starter-parent-3.5.12.pom (13 kB at 92 kB/s)`.
 
 ```mermaid
 sequenceDiagram
@@ -104,6 +110,46 @@ sequenceDiagram
     M->>H: GET ...jar
     Note over H: hit on the next build
 ```
+
+### Known issue: cold proxy fetches return 404
+
+On a freshly created instance, every **uncached** Maven path returns a bare
+`404 page not found` (Go's default handler, 19 bytes). Nothing is stored, and
+core logs no upstream attempt even at `LOG_LEVEL=debug`: the request reaches the
+route and is authenticated, then ends.
+
+```console
+$ curl -H "Authorization: Basic $B64" .../maven/mvn1/junit/junit/4.13.2/junit-4.13.2.pom
+404 page not found
+$ curl https://repo1.maven.org/maven2/junit/junit/4.13.2/junit-4.13.2.pom -o /dev/null -w '%{http_code}'
+200
+```
+
+Checked and ruled out:
+
+- the upstream endpoint reports `status: healthy`, and the project's
+  `registry_id` is bound correctly
+- Maven Central is reachable from inside the core container's network (200)
+- four upstream URL spellings (`/maven2`, `/maven2/`, the bare host, and
+  `repo.maven.apache.org`)
+- both `curl` and the real `mvn` client
+- repeated requests, in case the cache fill were asynchronous
+- a full teardown with fresh volumes
+- waiting out the 5 minute registry health-check interval
+
+The npm proxy cache on the **same instance, same moment** fetches fine, so this
+is specific to the Maven path rather than to proxying in general.
+
+Two honest caveats. Earlier in the same lab session Maven proxying did work:
+36 Maven repositories were populated by a real `mvn` run and a 97 KB POM came
+back byte-exact through Harbor. That state was destroyed by a `docker compose
+down -v` during this investigation, so it could not be inspected afterwards.
+And this was observed on a local Compose deployment, not on
+`8gcr.container-registry.dev`, where `/maven/` is not routed to core at all
+(see [00-environment.md](00-environment.md)).
+
+So: treat Maven proxy caching as unverified. Publishing to and resolving from
+the registry, covered below, worked consistently.
 
 ### The checksum warning
 

@@ -209,14 +209,40 @@ for this HelmRelease.
 curl -su admin:$PASS https://8gcr.container-registry.dev/npm/todomvc-npm/-/whoami
 ```
 
+## What could not be verified
+
+Two proxy-cache behaviours did not hold up under testing. Both were observed on a
+local Compose deployment of the same build, since `/npm/` and `/maven/` are not
+routed to core on the hosted instance.
+
+- **npm packuments are incomplete.** A package's version index omits versions
+  Harbor has stored and advertises a `dist-tags.latest` it does not list, so
+  `npm install` fails with `ETARGET`. Reproduction in
+  [03-npm.md](03-npm.md#known-issue-incomplete-packuments-through-the-proxy-cache).
+- **Maven cold fetches return 404.** On a clean instance every uncached Maven
+  path returns a bare `404 page not found` with no upstream attempt logged, while
+  the npm proxy on the same instance works. Full list of what was ruled out in
+  [04-maven.md](04-maven.md#known-issue-cold-proxy-fetches-return-404). Maven
+  proxying did work earlier in the same session; that state was destroyed during
+  the investigation and could not be re-examined.
+
+The `REPLICATION_ADAPTER_WHITELIST` environment variable, not any curation logic,
+is what determines the contents of `GET /api/v2.0/replication/adapters`. The
+Compose deployment that ships with the feature adds the package formats to it;
+the Helm chart does not, which is why the hosted instance's list omits npm and
+Maven along with `quay`, `gitlab` and `dtr`.
+
 ## A note on two things that look like evidence but are not
 
-**The provider dropdown is curated.** `GET /api/v2.0/replication/adapters`
-returns 14 entries with no npm or Maven, but it also omits `quay`, `gitlab`,
-`dtr` and `native`, whose `init` symbols are equally present in the binary. The
-list is not a reflection of what is registered, and creating the endpoints via
-the API works regardless. Expect to create npm/Maven endpoints with `curl`, not
-through the UI, until the list is widened.
+**The provider dropdown is filtered by an allowlist.**
+`GET /api/v2.0/replication/adapters` returns 14 entries with no npm or Maven, but
+it also omits `quay`, `gitlab`, `dtr` and `native`, whose `init` symbols are
+equally present in the binary. The filter is the `REPLICATION_ADAPTER_WHITELIST`
+environment variable on core. The Compose deployment that ships with the feature
+appends `npm,pypi,maven,cargo,go,go-sumdb,homebrew` to it; the Helm chart does
+not. Creating the endpoints through the API works regardless of the list, so
+until the chart is updated, create npm and Maven endpoints with `curl` rather
+than through the UI.
 
 **`npm login` does not work, and `_authToken` is not honoured.** Harbor accepts
 HTTP Basic (`_auth` in `.npmrc`) only. `GET /-/v1/login` returns 404 and npm's
