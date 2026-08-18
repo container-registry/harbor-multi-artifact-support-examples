@@ -1,0 +1,23 @@
+# Agent tooling — deliberately not part of the demo
+.claude/
+
+# Java / Maven
+target/
+*.class
+
+# Node
+node_modules/
+dist/
+.npmrc.local
+*.tsbuildinfo
+
+# Local secrets — never commit registry credentials
+.env
+.env.local
+settings-local.xml
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
