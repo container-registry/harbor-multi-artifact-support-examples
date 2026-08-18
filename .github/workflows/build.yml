@@ -184,10 +184,15 @@ jobs:
 
       - name: Log in to the registry
         # No password is stored anywhere. The OIDC token minted seconds ago is
-        # the password, and it expires in minutes.
+        # the password, and it expires in minutes. It goes through the
+        # environment rather than the command line so it never appears in a
+        # process listing or in `set -x` output.
+        env:
+          HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
-          printf '%s' '${{ steps.auth.outputs.password }}' \
-            | docker login "$REGISTRY" -u '${{ steps.auth.outputs.username }}' --password-stdin
+          printf '%s' "$HARBOR_PASSWORD" \
+            | docker login "$REGISTRY" -u "$HARBOR_USERNAME" --password-stdin
 
       - uses: docker/setup-buildx-action@v3
 
@@ -217,9 +222,10 @@ jobs:
           audience: ${{ env.REGISTRY }}
 
       - name: Pull the images back
+        env:
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
-          printf '%s' '${{ steps.auth.outputs.password }}' \
-            | docker login "$REGISTRY" -u jwt --password-stdin
+          printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u jwt --password-stdin
           for app in todo-api todo-ui; do
             docker pull "$REGISTRY/$IMAGE_PROJECT/$app:${{ github.sha }}"
           done
