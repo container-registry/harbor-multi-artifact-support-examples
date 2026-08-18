@@ -166,6 +166,7 @@ jobs:
   # Container images: the part that works on any Harbor, keyless.
   # ---------------------------------------------------------------------------
   images:
+    needs: preflight
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -196,11 +197,17 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      # Route the in-image dependency downloads through the registry too, but only
+      # when preflight found those endpoints reachable. Otherwise the defaults baked
+      # into the Dockerfiles resolve from upstream.
       - uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           push: ${{ github.event_name != 'pull_request' }}
           provenance: false
+          build-args: |
+            ${{ matrix.app == 'todo-api' && needs.preflight.outputs.maven_ready == 'true' && 'MAVEN_SETTINGS=.mvn/settings.xml' || '' }}
+            ${{ matrix.app == 'todo-ui' && needs.preflight.outputs.npm_ready == 'true' && format('NPM_REGISTRY=https://{0}/npm/{1}/', env.REGISTRY, env.NPM_PROJECT) || '' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PROJECT }}/${{ matrix.app }}:latest

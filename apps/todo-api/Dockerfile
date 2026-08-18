@@ -3,12 +3,16 @@
 # ---- build stage ----
 FROM maven:3.9-eclipse-temurin-21 AS build
 
-# The settings file carries a mirrorOf=* entry, so the Harbor Maven proxy must be
-# reachable for this stage to resolve anything at all. There is no "fall back to
-# central" switch: pointing MAVEN_SETTINGS at an empty/absent file is not a working
-# escape hatch, because Maven then also loses the <server> credentials. If the proxy
-# is down, build with a settings file that omits the mirror instead.
-ARG MAVEN_SETTINGS=.mvn/settings.xml
+# .mvn/settings.xml mirrors every dependency AND plugin through the registry, which is
+# what this repo is demonstrating. The image build defaults to the mirror-less settings
+# so `docker build` works for anyone; CI switches it to .mvn/settings.xml once its
+# preflight confirms the registry's Maven endpoint is reachable.
+#
+# If you force the mirrored settings while that endpoint is NOT routed to core, Maven
+# saves the web UI's HTML as a .pom and fails with:
+#   Non-parseable POM ...: Expected root element 'project' but found 'html'
+# See docs/00-environment.md.
+ARG MAVEN_SETTINGS=.mvn/settings-upstream.xml
 
 WORKDIR /build
 
