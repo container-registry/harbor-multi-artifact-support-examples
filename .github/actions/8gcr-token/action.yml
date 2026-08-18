@@ -24,9 +24,15 @@ runs:
   steps:
     - id: mint
       uses: actions/github-script@v7
+      env:
+        # Passed through the environment rather than interpolated into the script
+        # body. A `${{ }}` expression is substituted as raw text before Node parses
+        # the file, so an audience containing a quote or newline would either break
+        # parsing or change what the script does.
+        AUDIENCE: ${{ inputs.audience }}
       with:
         script: |
-          const token = await core.getIDToken(core.getInput('audience') || '${{ inputs.audience }}');
+          const token = await core.getIDToken(process.env.AUDIENCE);
           // Register the value with the runner's log scrubber BEFORE it can be
           // emitted anywhere. Without this, any step that echoes it, or a
           // failing curl that dumps its arguments, leaks a valid credential.

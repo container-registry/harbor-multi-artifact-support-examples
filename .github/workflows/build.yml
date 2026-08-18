@@ -12,9 +12,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# id-token: write is granted per job rather than here, so a job that never mints a
+# credential cannot request one. See the individual jobs below.
 permissions:
   contents: read
-  id-token: write        # required to mint the GitHub OIDC token; without it, core.getIDToken() fails
 
 env:
   REGISTRY: 8gcr.container-registry.dev
@@ -40,11 +41,16 @@ jobs:
     steps:
       - id: probe
         run: |
-          probe() {  # probe <url> -> "true" if a package API answered, "false" if the UI did
-            ct="$(curl -sS -o /dev/null -w '%{content_type}' "$1" || true)"
-            case "$ct" in
-              *text/html*|"") echo "false" ;;
-              *)              echo "true"  ;;
+          probe() {  # probe <url> -> "true" only if a package API really answered
+            read -r code ct <<<"$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' "$1" || echo '000 -')"
+            # The web UI answers 200 text/html for unrouted package paths. A JSON
+            # error body is still an error, so the status has to be checked too:
+            # 200 means it served, 401 means it demanded credentials, and both
+            # prove the package endpoint is behind this URL. Anything else is not.
+            case "$ct" in *text/html*) echo "false"; return ;; esac
+            case "$code" in
+              200|401) echo "true"  ;;
+              *)       echo "false" ;;
             esac
           }
           npm_ready="$(probe "https://$REGISTRY/npm/$NPM_PROJECT/")"
@@ -68,11 +74,18 @@ jobs:
   maven:
     needs: preflight
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write     # mints the registry credential
     defaults:
       run:
         working-directory: apps/todo-api
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
 
       - uses: actions/setup-java@v4
         with:
@@ -80,7 +93,7 @@ jobs:
           distribution: temurin
 
       - id: auth
-        if: needs.preflight.outputs.maven_ready == 'true'
+        if: needs.preflight.outputs.maven_ready == 'true' && github.event_name != 'pull_request'
         uses: ./.github/actions/8gcr-token
         with:
           audience: ${{ env.REGISTRY }}
@@ -90,14 +103,21 @@ jobs:
           HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
+          # Same reasoning as the npm job: a reachable endpoint is not proof it can
+          # serve a full tree. Maven proxy cold fetches could not be reproduced at
+          # all (see docs/04-maven.md), so a failure here falls back rather than
+          # blocking the build.
           if [ "${{ needs.preflight.outputs.maven_ready }}" = "true" ]; then
             # mirrorOf=* in .mvn/settings.xml sends dependencies AND plugins
             # through the registry's proxy cache.
-            mvn -B -s .mvn/settings.xml verify
+            if mvn -B -s .mvn/settings.xml verify; then
+              exit 0
+            fi
+            echo "::warning::Build through the registry failed; retrying against Maven Central. See docs/04-maven.md"
           else
             echo "::notice::Building against Maven Central - the registry's Maven endpoint is unreachable."
-            mvn -B verify
           fi
+          mvn -B verify
 
       - name: Publish jar
         if: needs.preflight.outputs.maven_ready == 'true' && github.event_name != 'pull_request'
@@ -117,24 +137,31 @@ jobs:
   npm:
     needs: preflight
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write     # mints the registry credential
     defaults:
       run:
         working-directory: apps/todo-ui
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - id: auth
-        if: needs.preflight.outputs.npm_ready == 'true'
+        if: needs.preflight.outputs.npm_ready == 'true' && github.event_name != 'pull_request'
         uses: ./.github/actions/8gcr-token
         with:
           audience: ${{ env.REGISTRY }}
 
       - name: Authenticate npm
-        if: needs.preflight.outputs.npm_ready == 'true'
+        if: needs.preflight.outputs.npm_ready == 'true' && github.event_name != 'pull_request'
         env:
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
@@ -146,12 +173,21 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Preflight only proves the endpoint answers, not that it can serve a
+          # whole dependency tree. The npm proxy cache currently returns packuments
+          # that omit versions it holds, which surfaces as ETARGET partway through
+          # an install (see docs/03-npm.md). Falling back keeps the build honest
+          # about where the packages came from instead of failing opaquely.
           if [ "${{ needs.preflight.outputs.npm_ready }}" = "true" ]; then
-            npm ci     # resolves via the registry= line in .npmrc -> proxy cache
+            if npm ci; then
+              exit 0
+            fi
+            echo "::warning::Install through the registry failed; retrying against npmjs.org. See docs/03-npm.md"
+            rm -rf node_modules
           else
             echo "::notice::Installing from npmjs.org - the registry's npm endpoint is unreachable."
-            npm ci --registry=https://registry.npmjs.org
           fi
+          npm ci --registry=https://registry.npmjs.org
 
       - run: npm run build
 
@@ -168,6 +204,9 @@ jobs:
   images:
     needs: preflight
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write     # mints the registry credential
     strategy:
       matrix:
         include:
@@ -177,13 +216,23 @@ jobs:
             context: apps/todo-ui
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
 
+      # Deliberately not run on pull_request. Everything after this step executes
+      # build code from the pull request, so minting a registry credential first
+      # would hand that credential to unreviewed code. Nothing is published from a
+      # pull request anyway, so there is nothing to authenticate for.
       - id: auth
+        if: github.event_name != 'pull_request'
         uses: ./.github/actions/8gcr-token
         with:
           audience: ${{ env.REGISTRY }}
 
       - name: Log in to the registry
+        if: github.event_name != 'pull_request'
         # No password is stored anywhere. The OIDC token minted seconds ago is
         # the password, and it expires in minutes. It goes through the
         # environment rather than the command line so it never appears in a
@@ -220,8 +269,15 @@ jobs:
     needs: [preflight, maven, npm, images]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write     # mints the registry credential
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The checkout token is not needed after clone, and the build steps below
+          # run repository-controlled Maven, npm and Docker input.
+          persist-credentials: false
 
       - id: auth
         uses: ./.github/actions/8gcr-token
