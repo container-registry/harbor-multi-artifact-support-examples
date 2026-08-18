@@ -226,7 +226,7 @@ jobs:
         run: |
           # Harbor accepts HTTP Basic via _auth. It does NOT accept _authToken,
           # despite what the portal's Usage tab shows. The username is ignored.
-          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 -w0)"
+          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
           echo "::add-mask::$auth"
           echo "//$REGISTRY/npm/$NPM_PROJECT/:_auth=$auth" >> .npmrc
 
@@ -351,7 +351,7 @@ jobs:
         env:
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
-          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 -w0)"
+          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
           echo "::add-mask::$auth"
           dir="$(mktemp -d)" && cd "$dir"
           cat > .npmrc <<EOF
