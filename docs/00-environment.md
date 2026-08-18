@@ -218,8 +218,14 @@ list is not a reflection of what is registered, and creating the endpoints via
 the API works regardless. Expect to create npm/Maven endpoints with `curl`, not
 through the UI, until the list is widened.
 
-**`npm login` appears to work but the token it stores does not.** Harbor honours
-HTTP Basic (`_auth` in `.npmrc`); it does not honour `_authToken`. The portal's
-**Usage** tab currently emits an `_authToken` line
-(`src/portal/.../usage/usage.component.ts`), which will produce a 401. Use
-`_auth`, as every example in this repository does.
+**`npm login` does not work, and `_authToken` is not honoured.** Harbor accepts
+HTTP Basic (`_auth` in `.npmrc`) only. `GET /-/v1/login` returns 404 and npm's
+legacy fallback `PUT /-/user/org.couchdb.user:<name>` is treated as a push and
+returns 401, so no token is ever issued. A `Bearer` header on an endpoint that
+requires credentials returns 401 where the same value sent as `Basic` returns
+200. The portal's **Usage** tab nevertheless emits an `_authToken` line
+(`src/portal/.../usage/usage.component.ts`). Use `_auth`, as every example in
+this repository does.
+
+Note that on a public project anonymous reads succeed, so an `_authToken`
+configuration can look correct until the first publish fails.

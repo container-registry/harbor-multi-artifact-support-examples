@@ -48,14 +48,36 @@ echo "//8gcr.container-registry.dev/npm/todomvc-npm/:_auth=$auth" >> .npmrc
 Two things to know:
 
 - **`_authToken` does not work.** It sends `Authorization: Bearer <token>`, which
-  the npm handler rejects. The portal's **Usage** tab for an npm repository emits
-  an `_authToken` line; that snippet is wrong and produces a 401. Use `_auth`.
+  the npm endpoint rejects. The portal's **Usage** tab for an npm repository emits
+  an `_authToken` line; that snippet is wrong. Use `_auth`.
+
+  Watch out for a misleading result here. On a **public** project, reads succeed
+  anonymously, so an `_authToken` line looks like it works right up until you
+  publish. Against an endpoint that actually requires credentials the difference
+  is plain:
+
+  ```console
+  $ curl -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $B64" .../npm/todomvc-npm/-/whoami
+  401
+  $ curl -o /dev/null -w '%{http_code}\n' -H "Authorization: Basic  $B64" .../npm/todomvc-npm/-/whoami
+  200
+  ```
+
 - **The username is ignored** when the password is an OIDC JWT. This repository
   writes `jwt` for legibility. With a conventional Harbor robot you would use the
   robot's own name and secret here, still through `_auth`.
 
-`npm login` appears to succeed against the endpoint but stores an `_authToken`,
-so it leaves you unauthenticated in practice. Write the `_auth` line yourself.
+**`npm login` does not work at all**, so do not reach for it. The modern endpoint
+is absent and npm's legacy fallback is treated as a push:
+
+```console
+$ curl -o /dev/null -w '%{http_code}\n' .../npm/todomvc-npm/-/v1/login
+404
+$ curl -X PUT .../npm/todomvc-npm/-/user/org.couchdb.user:admin -d '{...}'
+{"errors":[{"code":"UNAUTHORIZED","message":"unauthorized to push project todomvc-npm"}]}
+```
+
+No token is ever issued. Write the `_auth` line yourself.
 
 ## Install: the proxy path
 
