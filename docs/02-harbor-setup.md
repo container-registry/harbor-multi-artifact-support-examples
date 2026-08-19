@@ -40,12 +40,13 @@ Both return `201`. Harbor health-checks them, and both report `healthy`.
 
 ![Registry endpoints in the portal](images/portal-registries.png)
 
-The provider dropdown in **Administration → Registries → New Endpoint** does not
+The provider dropdown in **Administration → Registries → New Endpoint** may not
 offer npm or Maven. That list comes from `GET /api/v2.0/replication/adapters`,
 which is filtered by the `REPLICATION_ADAPTER_WHITELIST` environment variable on
-core rather than by what the build supports; the same list omits `quay`, `gitlab`
-and `dtr` too. `POST /registries` accepts the types regardless. Create these two
-endpoints with the API, not the UI.
+core rather than by what the build supports, so on a deployment that has not been
+given the package formats the same list also omits `quay`, `gitlab` and `dtr`.
+`POST /registries` accepts the types either way, which is why this page uses the
+API throughout.
 
 Note the endpoint ids for the next step:
 
