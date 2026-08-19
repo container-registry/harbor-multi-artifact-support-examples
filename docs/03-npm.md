@@ -182,33 +182,36 @@ versions than npmjs.org publishes. `dist-tags.latest` is always reported, and it
 is always the true upstream latest, but the version it names is not always among
 the versions listed.
 
-Measured against the live instance, comparing what Harbor lists with what
-upstream publishes:
+Measured against the live instance at 2026-08-19T10:40Z, comparing what Harbor
+lists, what upstream publishes, and what the project has actually stored:
 
-| Package | Listed by Harbor | Published upstream | `latest` also listed |
-|---|---|---|---|
-| `left-pad` | 15 | 15 | yes |
-| `postcss` | 256 | 290 | yes |
-| `vue` | 238 | 587 | yes |
-| `fdir` | 6 | 45 | no |
-| `lodash` | 6 | 117 | no |
-| `vite` | 4 | 748 | no |
+| Package | Listed by Harbor | Published upstream | Stored in the project | `latest` also listed |
+|---|---|---|---|---|
+| `left-pad` | 15 | 15 | 15 | yes |
+| `postcss` | 256 | 290 | 258 | yes |
+| `vue` | 238 | 587 | 3 | yes |
+| `fdir` | 6 | 45 | 7 | no |
+| `lodash` | 6 | 117 | 6 | no |
+| `vite` | 4 | 748 | 4 | no |
 
-The pattern behind those numbers is visible when you compare the listing with
-what the project actually stores. For `lodash` the two are identical:
+For five of the six, what Harbor lists is close to what the project has cached
+rather than to what npmjs.org publishes. `lodash` is the clean case, six listed
+against six stored:
 
 ```console
 $ curl -s .../npm/todomvc-npm/lodash | jq -c '.versions|keys'
 ["0.4.1","1.2.1","4.14.0","4.15.0","4.2.0","4.4.0"]
-
-$ curl -su "admin:$PASS" \
-    ".../api/v2.0/projects/todomvc-npm/repositories/npm%2Flodash/artifacts?with_tag=true" \
-    | jq -r '[.[]|.tags[].name]|sort|join(" ")'
-0.4.1 1.2.1 4.14.0 4.15.0 4.2.0 4.4.0
 ```
 
-Those six are the versions somebody happened to install through this project.
-For these packages the listing is the local cache, not the upstream index.
+Those six are the versions somebody happened to install through this project,
+and `left-pad` reads as complete only because all fifteen of its versions have
+been pulled through at some point. `vue` is the case that stops the explanation
+there: 238 listed against 3 stored. So the cache is where most of the shortfall
+comes from, but it is not the whole mechanism, and this is a measurement from
+outside rather than a diagnosis.
+
+The counts also move as the cache fills. Take the table as a snapshot, not a
+constant.
 
 **What this costs you.** A range resolves against whatever is listed; an exact
 pin of a version that is not listed fails:

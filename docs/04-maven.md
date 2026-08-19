@@ -221,17 +221,21 @@ $ curl -su "admin:$PASS" \
 
 The Maven proxy stops fetching, and when it does it says nothing. Every uncached
 path returns a bare `404 page not found` (Go's default handler, 19 bytes) while
-the same path serves `200` from Maven Central, and nothing is logged.
+the same path serves `200` from Maven Central.
 
-Measured in one session against the live instance:
+**What triggers it.** A cold `mvn verify` through the `mirrorOf=*` mirror. This
+was reproduced twice against the live instance: each time, cold coordinates were
+fetching normally, a `mvn verify` against an empty `-Dmaven.repo.local` ran and
+pulled several dozen artifacts through the mirror, and from then on every
+uncached coordinate returned 404. The first occurrence cleared on its own after
+roughly half an hour, with no intervention.
 
-| Time (UTC) | State |
-|---|---|
-| 10:04 – 10:07 | six cold coordinates fetched and cached correctly |
-| 10:07 | a `mvn verify` fires the Spring Boot tree at the project concurrently |
-| 10:09 onwards | every cold coordinate returns `404`, for over 20 minutes |
+Raw concurrency is not the trigger. Forty distinct cold coordinates fetched
+twenty at a time, including the exact BOM poms that had 404'd during the previous
+outage, all returned 200, and cold probes immediately afterwards still returned
+200.
 
-What that state is *not*:
+**What the failed state is not:**
 
 - not the upstream refusing us. `repo1.maven.org` answers `200` for the identical
   path throughout, and a **second endpoint pointed at a different host**
@@ -239,17 +243,38 @@ What that state is *not*:
   **freshly created project**, returns `404` for paths it has never been asked
   for before.
 - not endpoint health. `GET /api/v2.0/registries` reports `status: healthy` for
-  both endpoints while every fetch through them fails.
-- not project state or the connection limiter, both of which are per project and
-  per path, and the fresh project fails identically.
+  both endpoints while every fetch through them fails, which is also what the
+  portal shows.
+- not project state or the connection limiter, both of which are keyed per
+  project and per path, and the fresh project fails identically.
 - not npm. The npm proxy on the same instance, at the same moment, fetches cold
   packuments and cold tarballs without a hitch.
+- not specific to this deployment. The same `mvn verify` against a local Compose
+  lab running the same images puts it into the same state, across four Maven
+  projects bound to four separate endpoints, while that lab's npm project keeps
+  fetching.
+- not in-process state, and not the shared cache. On the lab the failure survives
+  both a `docker restart` of core and a `FLUSHDB` on Redis, and the rows it
+  depends on are intact: every registry reads `healthy` and every project keeps
+  its `registry_id`.
+
+The failed request also comes back in tens of milliseconds, which is faster than
+any upstream round trip, so whatever it is happens before the request leaves the
+process.
 
 Artifacts already cached keep serving normally, which is what makes this easy to
-miss: a warm build passes and a cold one does not.
+miss: a warm build passes and a cold one does not. What a cold build sees is a
+partial resolve followed by
+
+```
+[ERROR] ... was not found in https://8gcr.container-registry.dev/maven/todomvc-maven
+        during a previous attempt. This failure was cached in the local repository
+```
+
+and, on the next attempt, Maven not even retrying.
 
 The silence is by construction.
-`src/server/registry/maven/handler.go:472` swallows every error on this path:
+`src/server/registry/maven/handler.go:472` discards every error on this path:
 
 ```go
 func (h *handler) proxyRaw(w http.ResponseWriter, r *http.Request, project, p string, cacheable bool) bool {
@@ -265,14 +290,18 @@ func (h *handler) proxyRaw(w http.ResponseWriter, r *http.Request, project, p st
 
 `false` sends the request on to `http.NotFound`, so a configuration problem, an
 upstream 500 and a genuinely missing artifact are indistinguishable from outside
-and invisible from inside.
+and invisible from inside. Anyone diagnosing this from the registry side should
+start by giving those two branches a log line.
 
 **What to do about it today.** The repository ships a mirror-less fallback,
 [`.mvn/settings-upstream.xml`](../apps/todo-api/.mvn/settings-upstream.xml), that
 keeps the `<server>` entry so `deploy` still authenticates while resolution goes
 straight to Maven Central. The image build uses it by default and
 [the pipeline](06-pipeline.md) switches to the mirrored settings only when its
-preflight says the endpoint is answering.
+preflight says the endpoint is answering, falling back if the mirrored build
+fails. If you hit this by hand, pass `-U` or delete the `*.lastUpdated` files
+Maven wrote before retrying: Maven caches the failure and will not re-ask
+otherwise.
 
 ## Next
 
