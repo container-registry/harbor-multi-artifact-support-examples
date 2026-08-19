@@ -24,6 +24,10 @@ on:
 
 env:
   REGISTRY: 8gcr.container-registry.dev
+  # Split from REGISTRY because the probe below builds package URLs from it. Hard-coding
+  # https here would report a plain-HTTP registry as not ready, and the pipeline would
+  # then quietly build against npmjs.org and Maven Central instead of failing.
+  REGISTRY_SCHEME: https
   NPM_PROJECT: todomvc-npm
   MAVEN_PROJECT: todomvc-maven
   IMAGE_PROJECT: todomvc
@@ -87,8 +91,8 @@ jobs:
             fi
           }
 
-          npm_url="https://$REGISTRY/npm/$NPM_PROJECT/"
-          maven_url="https://$REGISTRY/maven/$MAVEN_PROJECT"
+          npm_url="$REGISTRY_SCHEME://$REGISTRY/npm/$NPM_PROJECT/"
+          maven_url="$REGISTRY_SCHEME://$REGISTRY/maven/$MAVEN_PROJECT"
           npm_ready="$(probe "$npm_url")";     npm_obs="$(observe "$npm_url")"
           maven_ready="$(probe "$maven_url")"; maven_obs="$(observe "$maven_url")"
           echo "npm_ready=$npm_ready"   >> "$GITHUB_OUTPUT"
@@ -324,7 +328,7 @@ jobs:
           provenance: false
           build-args: |
             ${{ matrix.app == 'todo-api' && needs.preflight.outputs.maven_ready == 'true' && 'MAVEN_SETTINGS=.mvn/settings.xml' || '' }}
-            ${{ matrix.app == 'todo-ui' && needs.preflight.outputs.npm_ready == 'true' && format('NPM_REGISTRY=https://{0}/npm/{1}/', env.REGISTRY, env.NPM_PROJECT) || '' }}
+            ${{ matrix.app == 'todo-ui' && needs.preflight.outputs.npm_ready == 'true' && format('NPM_REGISTRY={0}://{1}/npm/{2}/', env.REGISTRY_SCHEME, env.REGISTRY, env.NPM_PROJECT) || '' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PROJECT }}/${{ matrix.app }}:latest
@@ -367,7 +371,7 @@ jobs:
           echo "::add-mask::$auth"
           dir="$(mktemp -d)" && cd "$dir"
           cat > .npmrc <<EOF
-          registry=https://$REGISTRY/npm/$NPM_PROJECT/
+          registry=$REGISTRY_SCHEME://$REGISTRY/npm/$NPM_PROJECT/
           always-auth=true
           //$REGISTRY/npm/$NPM_PROJECT/:_auth=$auth
           EOF

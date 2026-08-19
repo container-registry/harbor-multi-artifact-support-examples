@@ -20,10 +20,16 @@ COPY pom.xml .
 COPY .mvn/ .mvn/
 COPY src/ src/
 
+# Falls back the way the pipeline's own Maven job does. A reachable endpoint is not
+# proof it can serve a whole dependency tree, and without this the image build is the
+# one place a degraded proxy cache fails the run outright instead of degrading.
+#
 # The jar is renamed here rather than copied by name below: CI sets the version from
 # the run number before packaging, so any name with a version in it is wrong by the
 # time the runtime stage runs.
 RUN mvn -s "${MAVEN_SETTINGS}" -B package -DskipTests \
+ || { echo "resolve through ${MAVEN_SETTINGS} failed, retrying against Maven Central"; \
+      mvn -s .mvn/settings-upstream.xml -B package -DskipTests; } \
  && mv target/todo-api-*.jar target/app.jar
 
 # ---- runtime stage ----
