@@ -1,0 +1,24 @@
+# Pull request entry point: build everything, publish nothing.
+#
+# The important line here is the permissions block. Every step after checkout runs
+# code from the branch under review, including Maven plugins, npm lifecycle
+# scripts and Dockerfile RUN layers. Granting `id-token: write` would let any of
+# them mint a registry credential directly from the runner, whatever step-level
+# conditions the pipeline sets, because a step condition is not a permission
+# boundary. So the grant is simply never made on this path.
+
+name: build
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_pipeline.yml
+    permissions:
+      contents: read
+    with:
+      publish: false

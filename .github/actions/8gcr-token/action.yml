@@ -1,0 +1,40 @@
+name: Mint an 8gcr credential
+description: >
+  Obtains a short-lived GitHub OIDC token and returns it as the password to use
+  against 8gcr. There is no token exchange step and no stored registry secret:
+  Harbor's robotjwt authenticator recognises a JWT in the HTTP Basic password
+  field, validates it against the identity provider's JWKS, and matches its
+  claims to a robot account.
+
+inputs:
+  audience:
+    description: OIDC audience to request. Must equal the `aud` claim rule configured on the IdP.
+    required: true
+
+outputs:
+  password:
+    description: The credential to use as the HTTP Basic password (username is ignored).
+    value: ${{ steps.mint.outputs.password }}
+  username:
+    description: Username to pair it with. Harbor ignores the value; `jwt` is used by convention.
+    value: jwt
+
+runs:
+  using: composite
+  steps:
+    - id: mint
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      env:
+        # Passed through the environment rather than interpolated into the script
+        # body. A `${{ }}` expression is substituted as raw text before Node parses
+        # the file, so an audience containing a quote or newline would either break
+        # parsing or change what the script does.
+        AUDIENCE: ${{ inputs.audience }}
+      with:
+        script: |
+          const token = await core.getIDToken(process.env.AUDIENCE);
+          // Register the value with the runner's log scrubber BEFORE it can be
+          // emitted anywhere. Without this, any step that echoes it, or a
+          // failing curl that dumps its arguments, leaks a valid credential.
+          core.setSecret(token);
+          core.setOutput('password', token);
