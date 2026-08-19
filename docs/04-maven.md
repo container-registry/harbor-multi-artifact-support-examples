@@ -293,6 +293,10 @@ upstream 500 and a genuinely missing artifact are indistinguishable from outside
 and invisible from inside. Anyone diagnosing this from the registry side should
 start by giving those two branches a log line.
 
+This is filed as
+[container-registry/8gcr#345](https://github.com/container-registry/8gcr/issues/345),
+with the reproduction and the full ruled-out list.
+
 **What to do about it today.** The repository ships a mirror-less fallback,
 [`.mvn/settings-upstream.xml`](../apps/todo-api/.mvn/settings-upstream.xml), that
 keeps the `<server>` entry so `deploy` still authenticates while resolution goes
