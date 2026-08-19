@@ -114,12 +114,16 @@ is the right trade here.
 ```yaml
 env:
   REGISTRY: 8gcr.container-registry.dev
+  REGISTRY_SCHEME: https
   NPM_PROJECT: todomvc-npm
   MAVEN_PROJECT: todomvc-maven
   IMAGE_PROJECT: todomvc
 ```
 
-One place to repoint the whole repository at a different registry.
+One place to repoint the whole repository at a different registry. `REGISTRY_SCHEME`
+is separate because the probe below builds package URLs from it: against a registry
+on plain HTTP, a hard-coded `https` reports both endpoints not ready and the build
+falls back to the upstream registries without ever saying why.
 
 ## Artifact versions
 
@@ -304,6 +308,11 @@ build-args: |
   ${{ matrix.app == 'todo-api' && needs.preflight.outputs.maven_ready == 'true' && 'MAVEN_SETTINGS=.mvn/settings.xml' || '' }}
 ```
 
+The retry lives in `apps/todo-api/Dockerfile` rather than here, because the job that
+learns whether the mirror can serve a whole tree is a different job and its result is
+not available at this point. Without it, a degraded proxy cache fails the image build
+outright while every other job degrades politely.
+
 Note that the build stage receives no registry credentials. `docker build` does
 not inherit the job's environment, so dependency resolution inside the image
 relies on the package projects being **public**. Keep them public, or pass
@@ -363,14 +372,20 @@ proving something the moment they are fixed.
 
 ## Running it against your own registry
 
-1. Change `REGISTRY` and the three project names in the `env:` block.
+1. Change `REGISTRY`, and `REGISTRY_SCHEME` if your instance is not on HTTPS, plus
+   the three project names in the `env:` block.
 2. Run [`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh) against your instance
-   with `GITHUB_REPO` set to your fork, so the claim rule matches.
-3. Update the hard-coded hostname in
-   [`apps/todo-ui/.npmrc`](../apps/todo-ui/.npmrc),
+   with `GITHUB_REPO` set to your fork, so the claim rule matches. Note the audience
+   it prints: it is the host from `HARBOR_URL` with the port, and the workflow has to
+   request that same string.
+3. Update the hard-coded URL, scheme included, in
+   [`apps/todo-ui/.npmrc`](../apps/todo-ui/.npmrc) and
+   [`.npmrc.example`](../apps/todo-ui/.npmrc.example),
    [`apps/todo-ui/package.json`](../apps/todo-ui/package.json) (`publishConfig`),
-   [`apps/todo-api/.mvn/settings.xml`](../apps/todo-api/.mvn/settings.xml) and the
-   `harbor.registry` property in [`apps/todo-api/pom.xml`](../apps/todo-api/pom.xml).
+   [`apps/todo-ui/README.md`](../apps/todo-ui/README.md),
+   [`apps/todo-api/.mvn/settings.xml`](../apps/todo-api/.mvn/settings.xml), and
+   `distributionManagement` plus the `harbor.registry` property in
+   [`apps/todo-api/pom.xml`](../apps/todo-api/pom.xml).
 
 No secret needs to be added to the repository. That is the entire point.
 

@@ -162,7 +162,9 @@ Release versions are immutable, with the same nuance as npm:
 | changed payload | `status code: 409, reason phrase: Conflict` |
 
 The first case makes a rerun of a CI job safe. The second is why the pipeline
-sets the version from `github.run_number` before deploying.
+sets the version from `github.run_number` before deploying. The check is per file,
+not per deploy: a rebuilt jar at an existing version 409s while the unchanged
+`.pom` beside it uploads successfully in the same run.
 
 ## Pull it back
 
@@ -222,6 +224,20 @@ $ curl -su "admin:$PASS" \
 The Maven proxy stops fetching, and when it does it says nothing. Every uncached
 path returns a bare `404 page not found` (Go's default handler, 19 bytes) while
 the same path serves `200` from Maven Central.
+
+**Check whether it applies to you first.** Observed on
+`8gcr.container-registry.dev` (`2.16.0-ca75082c`) on 2026-08-19 and tracked as
+[8gcr#345](https://github.com/container-registry/8gcr/issues/345); it is not
+present on every build. Run one cold `mvn verify` through the mirror, then ask for
+a coordinate that build did not touch:
+
+```bash
+curl -so /dev/null -w '%{http_code}\n' \
+  .../maven/todomvc-maven/org/apache/commons/commons-text/1.9/commons-text-1.9.pom
+```
+
+`200` means your instance is unaffected and you can ignore the rest of this
+section, including the fallback it describes.
 
 **What triggers it.** A cold `mvn verify` through the `mirrorOf=*` mirror. This
 was reproduced twice against the live instance: each time, cold coordinates were
@@ -292,10 +308,6 @@ func (h *handler) proxyRaw(w http.ResponseWriter, r *http.Request, project, p st
 upstream 500 and a genuinely missing artifact are indistinguishable from outside
 and invisible from inside. Anyone diagnosing this from the registry side should
 start by giving those two branches a log line.
-
-This is filed as
-[container-registry/8gcr#345](https://github.com/container-registry/8gcr/issues/345),
-with the reproduction and the full ruled-out list.
 
 **What to do about it today.** The repository ships a mirror-less fallback,
 [`.mvn/settings-upstream.xml`](../apps/todo-api/.mvn/settings-upstream.xml), that
