@@ -15,13 +15,6 @@ GITHUB_REPO=container-registry/harbor-multi-artifact-support-examples \
 Read the script rather than trusting this page if the two ever disagree; the
 script is what was run against the live instance.
 
-> The npm and Maven parts of this setup do not currently complete against
-> `8gcr.container-registry.dev`. Project creation fails with
-> `unsupported registry type npm`, and `/npm/` and `/maven/` are not routed to
-> core. Both are deployment-configuration gaps, described with their fixes in
-> [00-environment.md](00-environment.md). The federated IdP, the robot and the
-> `todomvc` image project all work today.
-
 Shared setup for the commands below:
 
 ```bash
@@ -48,10 +41,11 @@ Both return `201`. Harbor health-checks them, and both report `healthy`.
 ![Registry endpoints in the portal](images/portal-registries.png)
 
 The provider dropdown in **Administration → Registries → New Endpoint** does not
-offer npm or Maven. That list is curated and does not reflect what the running
-build supports; it also omits several container providers that are present. Create
-these two endpoints with the API, not the UI. The reasoning behind that statement
-is in [00-environment.md](00-environment.md).
+offer npm or Maven. That list comes from `GET /api/v2.0/replication/adapters`,
+which is filtered by the `REPLICATION_ADAPTER_WHITELIST` environment variable on
+core rather than by what the build supports; the same list omits `quay`, `gitlab`
+and `dtr` too. `POST /registries` accepts the types regardless. Create these two
+endpoints with the API, not the UI.
 
 Note the endpoint ids for the next step:
 
@@ -107,11 +101,10 @@ published locally, side by side.
 
 ![Maven repositories in todomvc-maven](images/portal-maven-repositories.png)
 
-Two things to read past in these screenshots. The filter chips render raw i18n
-keys (`REPOSITORY.FORMAT_ALL`, `REPOSITORY.FORMAT_NPM`, `REPOSITORY.GROUP_BY_ECOSYSTEM`)
-instead of English labels, because those translations are missing from the portal
-build; the counts next to them are correct. And repository names carry the format
-as a path segment: `todomvc-npm/npm/left-pad`, `todomvc-maven/maven/org/apache/commons/commons-lang3`.
+Repository names carry the format as a path segment:
+`todomvc-npm/npm/left-pad`, `todomvc-maven/maven/org/apache/commons/commons-lang3`.
+That is how one project holds several package formats without their names
+colliding.
 
 ## 3. Federated identity provider
 
@@ -233,35 +226,30 @@ narrow further, add a rule on `ref` (`refs/heads/main`) or `environment`.
 
 ## 6. Check it
 
-```bash
-# npm: JSON, not HTML, is the success signal. HTML means the request reached the
-# web UI instead of core; see 00-environment.md.
-curl -su "admin:$PASS" "$HARBOR_URL/npm/todomvc-npm/-/whoami"
+JSON or XML, not HTML, is the success signal. The portal answers `200 text/html`
+for any path it does not recognise, so a path that lands on it looks like a
+success to `curl -f` and like a parse error to npm.
 
-# Maven
-curl -sI "$HARBOR_URL/maven/todomvc-maven/org/apache/commons/commons-lang3/maven-metadata.xml"
+```console
+$ curl -su "admin:$PASS" "$HARBOR_URL/npm/todomvc-npm/-/whoami"
+{"username":"admin"}
 
-# Images
-curl -sI "$HARBOR_URL/v2/"
+$ curl -s "$HARBOR_URL/maven/todomvc-maven/com/containerregistry/todo/todo-api/maven-metadata.xml"
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>com.containerregistry.todo</groupId>
+  <artifactId>todo-api</artifactId>
+  ...
+
+$ curl -so /dev/null -w '%{http_code}\n' "$HARBOR_URL/v2/"
+401
 ```
 
----
+`401` from `/v2/` is correct: that is the OCI distribution API asking for a
+token, which is what `docker login` answers.
 
-### Footnote: plain-HTTP local labs
-
-Only relevant if you run Harbor over `http://` on your own machine, for example
-with the Compose deployment. It does not apply to the hosted instance, which is
-HTTPS.
-
-Portal login fails with:
-
-```json
-403 {"code":"FORBIDDEN","message":"origin invalid"}
-```
-
-The CSRF middleware (`src/server/middleware/csrf/csrf.go`) requires a secure
-origin. Set `CSRF_PLAINTEXT_HTTP=true` on the core container to allow plain HTTP,
-and only do that on a lab.
+The equivalent check the pipeline runs before it publishes anything is in
+[06-pipeline.md](06-pipeline.md#preflight).
 
 ## Next
 

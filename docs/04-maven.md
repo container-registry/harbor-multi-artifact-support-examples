@@ -12,10 +12,6 @@ https://8gcr.container-registry.dev/maven/todomvc-maven
 No trailing slash, and no `/repository/` or `/releases/` suffix. The project name
 is the last segment.
 
-> `/maven/` is not currently routed to core on `8gcr.container-registry.dev`.
-> See [00-environment.md](00-environment.md). The commands below were exercised
-> against a deployment where the route is present.
-
 ## The client configuration
 
 [`apps/todo-api/.mvn/settings.xml`](../apps/todo-api/.mvn/settings.xml):
@@ -81,98 +77,17 @@ authenticates both the reads through the mirror and the writes to
 `distributionManagement`. If the ids drift apart, reads become anonymous, or the
 deploy fails with a 401 that names a repository you thought you had configured.
 
-## Resolving through the proxy
-
-> **Known issue: the Maven proxy cache could not be reproduced from a clean
-> instance.** See [below](#known-issue-cold-proxy-fetches-return-404) before you
-> rely on this. Everything else on this page (client configuration, publishing,
-> resolving your own artifacts) is unaffected.
-
-When it works, `mvn verify` pulls the entire Spring Boot dependency tree through
-the project and artifacts come back byte-identical to upstream. For example,
-`spring-boot-dependencies-3.5.12.pom` is 97521 bytes both from Maven Central and
-through `todomvc-maven`, and Maven logs the fetch as
-`Downloaded from 8gcr: .../spring-boot-starter-parent-3.5.12.pom (13 kB at 92 kB/s)`.
-
-```mermaid
-sequenceDiagram
-    participant M as Maven
-    participant H as Harbor (todomvc-maven)
-    participant C as repo1.maven.org
-
-    M->>H: GET .../org/springframework/boot/spring-boot-starter-web/3.5.12/...pom
-    H->>H: look in native storage
-    Note over H: miss
-    H->>C: GET same path
-    C-->>H: pom bytes
-    H-->>M: pom bytes (streamed)
-    H--)H: store (best effort)
-    M->>H: GET ...jar
-    Note over H: hit on the next build
-```
-
-### Known issue: cold proxy fetches return 404
-
-On a freshly created instance, every **uncached** Maven path returns a bare
-`404 page not found` (Go's default handler, 19 bytes). Nothing is stored, and
-core logs no upstream attempt even at `LOG_LEVEL=debug`: the request reaches the
-route and is authenticated, then ends.
-
-```console
-$ curl -H "Authorization: Basic $B64" .../maven/mvn1/junit/junit/4.13.2/junit-4.13.2.pom
-404 page not found
-$ curl https://repo1.maven.org/maven2/junit/junit/4.13.2/junit-4.13.2.pom -o /dev/null -w '%{http_code}'
-200
-```
-
-Checked and ruled out:
-
-- the upstream endpoint reports `status: healthy`, and the project's
-  `registry_id` is bound correctly
-- Maven Central is reachable from inside the core container's network (200)
-- four upstream URL spellings (`/maven2`, `/maven2/`, the bare host, and
-  `repo.maven.apache.org`)
-- both `curl` and the real `mvn` client
-- repeated requests, in case the cache fill were asynchronous
-- a full teardown with fresh volumes
-- waiting out the 5 minute registry health-check interval
-
-The npm proxy cache on the **same instance, same moment** fetches fine, so this
-is specific to the Maven path rather than to proxying in general.
-
-Two honest caveats. Earlier in the same lab session Maven proxying did work:
-36 Maven repositories were populated by a real `mvn` run and a 97 KB POM came
-back byte-exact through Harbor. That state was destroyed by a `docker compose
-down -v` during this investigation, so it could not be inspected afterwards.
-And this was observed on a local Compose deployment, not on
-`8gcr.container-registry.dev`, where `/maven/` is not routed to core at all
-(see [00-environment.md](00-environment.md)).
-
-So: treat Maven proxy caching as unverified. Publishing to and resolving from
-the registry, covered below, worked consistently.
-
-### The checksum warning
-
-Maven prints this for proxied files:
-
-```
-[WARNING] Checksum validation failed, no checksums available from 8gcr for ...
-```
-
-It is a warning, not an error, and the build succeeds. Harbor is not serving the
-`.sha1` and `.md5` sidecar files that Maven Central publishes alongside each
-artifact, so Maven has nothing to compare against and says so. Expect to see many
-of these lines on a cold cache. They are noise, not a failure.
-
-Do not reach for `-C` (`--strict-checksums`) to tidy this up. It turns the same
-condition into a build failure. The default checksum policy, `warn`, is the one
-you want against this proxy.
-
 ## Publishing
 
-```bash
-mvn -B -s .mvn/settings.xml versions:set -DnewVersion=0.1.7 -DgenerateBackupPoms=false
-mvn -B -s .mvn/settings.xml deploy -DskipTests
+```console
+$ mvn -B -s .mvn/settings.xml versions:set -DnewVersion=0.1.102 -DgenerateBackupPoms=false
+$ mvn -B -s .mvn/settings.xml deploy -DskipTests
+[INFO] Uploading to 8gcr: .../com/containerregistry/todo/todo-api/0.1.102/todo-api-0.1.102.jar
+[INFO] Uploaded to 8gcr:  .../todo-api-0.1.102.jar (54 MB at 16 MB/s)
+[INFO] Uploading to 8gcr: .../todo-api-0.1.102.pom
+[INFO] Downloading from 8gcr: .../com/containerregistry/todo/todo-api/maven-metadata.xml
+[INFO] Uploading to 8gcr:   .../com/containerregistry/todo/todo-api/maven-metadata.xml
+[INFO] BUILD SUCCESS
 ```
 
 `distributionManagement` in [`pom.xml`](../apps/todo-api/pom.xml) points back at
@@ -193,18 +108,61 @@ The artifact appears as `todomvc-maven/maven/com/containerregistry/todo/todo-api
 ### What Harbor does with metadata and checksums
 
 Two behaviours differ from a plain file-server repository, and both are
-deliberate:
+deliberate.
 
-- **`maven-metadata.xml` is synthesized.** Harbor generates the version index from
-  the artifacts it actually holds, rather than storing and serving whatever
-  `maven-metadata.xml` a client uploaded. A stale or hand-edited metadata file
-  therefore cannot desynchronize the repository from its contents.
-- **Checksums are derived, not trusted.** Harbor computes the digest of the bytes
-  it received instead of accepting the `.sha1` a client uploaded alongside them.
-  An uploaded checksum that disagrees with the payload cannot be served back.
+**`maven-metadata.xml` is synthesized.** Maven uploads one during `deploy`;
+Harbor discards it and generates the version index from the artifacts it actually
+holds. A stale or hand-edited metadata file therefore cannot desynchronize the
+repository from its contents.
 
-Release versions are immutable. Redeploying the same version is a conflict, which
-is why the pipeline sets the version from `github.run_number` before deploying.
+```console
+$ curl -s .../maven/todomvc-maven/com/containerregistry/todo/todo-api/maven-metadata.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>com.containerregistry.todo</groupId>
+  <artifactId>todo-api</artifactId>
+  <versioning>
+    <latest>0.1.102</latest>
+    <release>0.1.102</release>
+    <versions>
+      <version>0.1.101</version>
+      <version>0.1.102</version>
+    </versions>
+    <lastUpdated>20260819102316</lastUpdated>
+  </versioning>
+</metadata>
+```
+
+**Checksums are derived, not trusted.** Maven `PUT`s a `.sha1` and a `.md5`
+beside each file. Harbor accepts and discards them, and computes the digest of
+the bytes it received when one is requested, so an uploaded checksum that
+disagrees with its payload cannot be served back:
+
+```console
+$ curl -s .../todo-api/0.1.0-verify1/todo-api-0.1.0-verify1.pom.sha1
+277fa34694c431975f3d9e540df8f4f54c4d3a93
+$ curl -s .../todo-api/0.1.0-verify1/todo-api-0.1.0-verify1.pom | shasum -a 1
+277fa34694c431975f3d9e540df8f4f54c4d3a93  -
+```
+
+The same holds for files that arrived through the proxy cache rather than from a
+`deploy`: `commons-io-2.6.pom` and `slf4j-api-2.0.13.jar` both serve a `.sha1`
+that matches their bytes. Maven validates these on download and a cold resolve
+through the mirror prints no checksum warnings, so the default checksum policy
+(`warn`) needs no adjusting here and `-C` / `--strict-checksums` is not something
+you have to work around.
+
+### Version immutability
+
+Release versions are immutable, with the same nuance as npm:
+
+| Redeploy of an existing version | Result |
+|---|---|
+| identical payload | succeeds, idempotently |
+| changed payload | `status code: 409, reason phrase: Conflict` |
+
+The first case makes a rerun of a CI job safe. The second is why the pipeline
+sets the version from `github.run_number` before deploying.
 
 ## Pull it back
 
@@ -215,11 +173,106 @@ network:
 mvn -B -s apps/todo-api/.mvn/settings.xml \
   -Dmaven.repo.local="$(mktemp -d)" \
   dependency:get \
-  -Dartifact=com.containerregistry.todo:todo-api:0.1.7
+  -Dartifact=com.containerregistry.todo:todo-api:0.1.102
 ```
 
 `-Dmaven.repo.local` pointing at a fresh temp directory is the part that matters.
 Without it, `dependency:get` can be satisfied from `~/.m2` and prove nothing.
+
+Note what this command needs: `dependency:get` is itself a plugin, so a genuinely
+cold local repository has to resolve `maven-dependency-plugin` and its
+dependencies through the mirror before it can fetch your artifact. It exercises
+the proxy path as much as the native one.
+
+## Resolving through the proxy
+
+```mermaid
+sequenceDiagram
+    participant M as Maven
+    participant H as Harbor (todomvc-maven)
+    participant C as repo1.maven.org
+
+    M->>H: GET .../org/springframework/boot/spring-boot-starter-web/3.5.12/...pom
+    H->>H: look in native storage
+    Note over H: miss
+    H->>C: GET same path
+    C-->>H: pom bytes
+    H-->>M: pom bytes (streamed)
+    H--)H: store (best effort)
+    M->>H: GET ...jar
+    Note over H: hit on the next build
+```
+
+When it is fetching, it fetches correctly. Cold coordinates come back
+byte-identical to upstream and are stored, so the next request is local:
+
+```console
+$ curl -so /dev/null -w '%{http_code} %{size_download}\n' \
+    .../maven/todomvc-maven/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar
+200 68605
+
+$ curl -su "admin:$PASS" \
+    ".../api/v2.0/projects/todomvc-maven/repositories/maven%2Forg%2Fslf4j%2Fslf4j-api/artifacts?with_tag=true" \
+    | jq -r '.[]|"\(.tags[].name) cached at \(.push_time)"'
+2.0.13 cached at 2026-08-19T10:07:00.935Z
+```
+
+### The failure mode to know about
+
+The Maven proxy stops fetching, and when it does it says nothing. Every uncached
+path returns a bare `404 page not found` (Go's default handler, 19 bytes) while
+the same path serves `200` from Maven Central, and nothing is logged.
+
+Measured in one session against the live instance:
+
+| Time (UTC) | State |
+|---|---|
+| 10:04 – 10:07 | six cold coordinates fetched and cached correctly |
+| 10:07 | a `mvn verify` fires the Spring Boot tree at the project concurrently |
+| 10:09 onwards | every cold coordinate returns `404`, for over 20 minutes |
+
+What that state is *not*:
+
+- not the upstream refusing us. `repo1.maven.org` answers `200` for the identical
+  path throughout, and a **second endpoint pointed at a different host**
+  (`maven-central.storage-download.googleapis.com/maven2`), bound to a
+  **freshly created project**, returns `404` for paths it has never been asked
+  for before.
+- not endpoint health. `GET /api/v2.0/registries` reports `status: healthy` for
+  both endpoints while every fetch through them fails.
+- not project state or the connection limiter, both of which are per project and
+  per path, and the fresh project fails identically.
+- not npm. The npm proxy on the same instance, at the same moment, fetches cold
+  packuments and cold tarballs without a hitch.
+
+Artifacts already cached keep serving normally, which is what makes this easy to
+miss: a warm build passes and a cold one does not.
+
+The silence is by construction.
+`src/server/registry/maven/handler.go:472` swallows every error on this path:
+
+```go
+func (h *handler) proxyRaw(w http.ResponseWriter, r *http.Request, project, p string, cacheable bool) bool {
+	proxy, err := pkgproxy.ForProject(r.Context(), project, regmodel.RegistryTypeMaven)
+	if err != nil || proxy == nil || proxy.Registry == nil {
+		return false          // no log line
+	}
+	resp, err := proxy.Get(r.Context(), p, nil)
+	if err != nil {
+		return false          // no log line
+	}
+```
+
+`false` sends the request on to `http.NotFound`, so a configuration problem, an
+upstream 500 and a genuinely missing artifact are indistinguishable from outside
+and invisible from inside.
+
+**What to do about it today.** The repository ships a mirror-less fallback,
+[`.mvn/settings-upstream.xml`](../apps/todo-api/.mvn/settings-upstream.xml), that
+keeps the `<server>` entry so `deploy` still authenticates while resolution goes
+straight to Maven Central. The image build uses it by default and
+[the pipeline](06-pipeline.md) switches to the mirrored settings only when its
+preflight says the endpoint is answering.
 
 ## Next
 

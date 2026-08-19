@@ -1,6 +1,6 @@
 # Concepts: one registry, three artifact kinds
 
-[← Environment](00-environment.md) · [Harbor setup →](02-harbor-setup.md)
+[← README](../README.md) · [Harbor setup →](02-harbor-setup.md)
 
 This repository exists to demonstrate a single claim: one 8gcr/Harbor instance can
 be the only artifact store a project needs. The TodoMVC apps are scaffolding. What
@@ -117,7 +117,7 @@ This repository uses `jwt` by convention.
 ## Next
 
 - [02-harbor-setup.md](02-harbor-setup.md): provisioning the endpoints, projects, IdP and robot
-- [03-npm.md](03-npm.md): npm, including a known packument defect
-- [04-maven.md](04-maven.md): Maven
+- [03-npm.md](03-npm.md): npm, from `npm ci` through `npm publish` and back
+- [04-maven.md](04-maven.md): Maven, the same round trip
 - [05-images-wif.md](05-images-wif.md): keyless image push and pull
 - [06-pipeline.md](06-pipeline.md): the whole thing in CI

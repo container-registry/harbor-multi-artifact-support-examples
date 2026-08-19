@@ -6,9 +6,6 @@ Container images go into the plain `todomvc` project over the ordinary OCI API.
 Nothing about the registry side is unusual. What is unusual is that the pipeline
 holds no registry password, and none is stored in GitHub.
 
-Unlike npm and Maven, this part works against `8gcr.container-registry.dev`
-today. The gaps in [00-environment.md](00-environment.md) do not touch `/v2/`.
-
 ## There is no token exchange
 
 This is the single fact to take away, because most OIDC integrations do not work

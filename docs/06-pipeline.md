@@ -157,12 +157,11 @@ rather than copying.
 
 Harbor core serves `/npm/` and `/maven/`, but the ingress in front of core decides
 whether those paths ever reach it. A deployment can have the feature compiled in
-and still route those paths to the web UI, which answers with 785 bytes of
-`index.html` and HTTP 200. npm then tries to parse that HTML as a packument and
-reports a JSON parse error partway through an install; Maven reports something
-equally unhelpful. The cause and the symptom look nothing alike, and this is the
-current state of `8gcr.container-registry.dev`
-([00-environment.md](00-environment.md)).
+and still route those paths to the web UI, which answers with `index.html` and
+HTTP 200. npm then tries to parse that HTML as a packument and reports a JSON
+parse error partway through an install; Maven saves the HTML as a `.pom` and
+fails with `Expected root element 'project' but found 'html'`. The cause and the
+symptom look nothing alike.
 
 The probe checks the status and the content type, and bounds itself in time:
 
@@ -172,31 +171,39 @@ probe() {  # "true" only if a package API really answered
     -o /dev/null -w '%{http_code} %{content_type}' "$1" || echo '000 -')"
   case "$ct" in *text/html*) echo "false"; return ;; esac
   case "$code" in
-    200) echo "true"  ;;
-    *)   echo "false" ;;
+    200|404) echo "true"  ;;
+    *)       echo "false" ;;
   esac
 }
 ```
 
-Three things it deliberately rejects:
+The content type is the routing signal, and the status narrows it. On a working
+instance the two probed URLs do not answer alike:
 
-- **200 with `text/html`** is the routing failure above.
-- **A JSON error.** Checking only the content type would read a `404` or `500`
-  JSON body as a healthy endpoint and send the build at it.
-- **A 401.** That proves the endpoint is there, but the image builds resolve
-  dependencies inside `docker build`, which receives no credentials, so pointing
-  them at a project that demands authentication only moves the failure. This demo
-  keeps its package projects public.
+| Probed URL | Response | Verdict |
+|---|---|---|
+| `/npm/todomvc-npm/` | `200 application/json` (`{}`) | ready |
+| `/maven/todomvc-maven` | `404 text/plain` (19 bytes) | ready |
+| `/mavenx/todomvc-maven` | `200 text/html` | not ready, the portal answered |
+| `/maven/no-such-project` | `401 application/json` | not ready |
+
+A Maven project has nothing at its own root even when it is perfectly healthy, so
+`404 text/plain` is the routed answer there and demanding a `200` would report a
+working registry as broken. The 401 case is rejected on purpose: it proves the
+endpoint is there, but the image builds resolve dependencies inside
+`docker build`, which receives no credentials, so pointing them at a project that
+demands authentication only moves the failure. This demo keeps its package
+projects public.
 
 The timeouts matter because an endpoint can accept a connection and then never
 respond, which would hang `preflight` and with it every job waiting on it.
 
 The two outputs, `npm_ready` and `maven_ready`, gate the later jobs. When an
 endpoint is unreachable the workflow does not fail; it builds against the upstream
-registry instead, emits a `::warning::` naming the cause, and writes a small table
-to the job summary. That keeps the repository buildable while the deployment gaps
-are open, and makes the reason visible in one line instead of buried in an npm
-stack trace.
+registry instead, emits a `::warning::`, and writes a small table to the job
+summary carrying the observed status and content type. That keeps the repository
+buildable through a registry outage, and makes the reason visible in one line
+instead of buried in an npm stack trace.
 
 ## `maven`
 
@@ -230,11 +237,11 @@ mvn -B verify                                    # straight to Maven Central
 ```
 
 Note the retry. A reachable endpoint is not proof it can serve a whole dependency
-tree, and Maven proxy cold fetches could not be reproduced at all
-([04-maven.md](04-maven.md#known-issue-cold-proxy-fetches-return-404)). Falling
-back keeps the build honest about where the packages came from instead of failing
-opaquely. The npm job does the same, for the packument defect in
-[03-npm.md](03-npm.md).
+tree: the Maven proxy stops fetching cold coordinates without saying so
+([04-maven.md](04-maven.md#the-failure-mode-to-know-about)). Falling back keeps
+the build honest about where the packages came from instead of failing opaquely.
+The npm job does the same, for the partial packuments in
+[03-npm.md](03-npm.md#where-the-proxy-cache-is-still-rough-partial-packuments).
 
 The settings file is what redirects resolution, via `mirrorOf=*`, and it is also
 what supplies credentials, via the `<server>` entry whose id matches. Dropping the

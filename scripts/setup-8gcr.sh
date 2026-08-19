@@ -163,7 +163,7 @@ if post /projects "{\"project_name\":\"todomvc-npm\",\"registry_id\":$NPM_REG_ID
 else
   warn "npm proxy-cache project could not be created."
   warn "If the error says 'unsupported registry type npm', the core container is"
-  warn "missing npm/maven in PERMITTED_REGISTRY_TYPES_FOR_PROXY_CACHE - see docs/00-environment.md."
+  warn "missing npm/maven in PERMITTED_REGISTRY_TYPES_FOR_PROXY_CACHE on the core container."
 fi
 if post /projects "{\"project_name\":\"todomvc-maven\",\"registry_id\":$MVN_REG_ID,\"metadata\":{\"public\":\"true\",\"proxy_cache_allow_push\":\"true\"}}" "project todomvc-maven"; then
   assert_project todomvc-maven "$MVN_REG_ID"

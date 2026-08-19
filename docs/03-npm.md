@@ -8,11 +8,6 @@ repository publishes, from local storage. That is what
 `proxy_cache_allow_push=true` on the `todomvc-npm` project buys; see
 [01-concepts.md](01-concepts.md).
 
-> `/npm/` is not currently routed to core on `8gcr.container-registry.dev`, so
-> these commands return the portal's HTML instead of JSON there. The symptom and
-> the fix are in [00-environment.md](00-environment.md). Everything below was
-> exercised against a deployment where the route is present.
-
 ## Point npm at the project
 
 [`apps/todo-ui/.npmrc`](../apps/todo-ui/.npmrc):
@@ -58,10 +53,10 @@ Two things to know:
   is plain:
 
   ```console
-  $ curl -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $B64" .../npm/todomvc-npm/-/whoami
-  401
-  $ curl -o /dev/null -w '%{http_code}\n' -H "Authorization: Basic  $B64" .../npm/todomvc-npm/-/whoami
-  200
+  $ curl -sH "Authorization: Bearer $B64" .../npm/todomvc-npm/-/whoami
+  {"error":"unauthorized"}
+  $ curl -sH "Authorization: Basic $B64" .../npm/todomvc-npm/-/whoami
+  {"username":"admin"}
   ```
 
 - **The username is ignored** when the password is an OIDC JWT. This repository
@@ -72,10 +67,10 @@ Two things to know:
 is absent and npm's legacy fallback is treated as a push:
 
 ```console
-$ curl -o /dev/null -w '%{http_code}\n' .../npm/todomvc-npm/-/v1/login
-404
-$ curl -X PUT .../npm/todomvc-npm/-/user/org.couchdb.user:admin -d '{...}'
-{"errors":[{"code":"UNAUTHORIZED","message":"unauthorized to push project todomvc-npm"}]}
+$ curl -s .../npm/todomvc-npm/-/v1/login
+{"error":"web login not supported, use Basic auth (.npmrc _auth)"}
+$ curl -sX PUT .../npm/todomvc-npm/-/user/org.couchdb.user:admin -d '{...}'
+{"errors":[{"code":"UNAUTHORIZED","message":"unauthorized to push project todomvc-npm: unauthorized to push project todomvc-npm"}]}
 ```
 
 No token is ever issued. Write the `_auth` line yourself.
@@ -124,9 +119,11 @@ under this `.npmrc` still fetches through Harbor.
 
 ## Publish: the native path
 
-```bash
-npm version 0.1.7 --no-git-tag-version
-npm publish
+```console
+$ npm version 0.1.100 --no-git-tag-version
+$ npm publish
+npm notice Publishing to https://8gcr.container-registry.dev/npm/todomvc-npm/
++ todomvc-todo-ui@0.1.100
 ```
 
 The package lands in the same project it resolves from, as
@@ -152,87 +149,101 @@ versions by `github.run_number` for exactly this reason
 Publishing that is never read back proves nothing. From a clean directory with a
 cold cache:
 
-```bash
-dir="$(mktemp -d)" && cd "$dir"
-cat > .npmrc <<EOF
+```console
+$ dir="$(mktemp -d)" && cd "$dir"
+$ cat > .npmrc <<EOF
 registry=https://8gcr.container-registry.dev/npm/todomvc-npm/
 always-auth=true
 //8gcr.container-registry.dev/npm/todomvc-npm/:_auth=$auth
 EOF
 
-npm view todomvc-todo-ui@0.1.7
-npm pack todomvc-todo-ui@0.1.7
+$ npm view todomvc-todo-ui@0.1.100 --cache "$dir/.cache"
+todomvc-todo-ui@0.1.100 | MIT | deps: 3 | versions: 2
+.tarball: https://8gcr.container-registry.dev/npm/todomvc-npm/todomvc-todo-ui/-/todomvc-todo-ui-0.1.100.tgz
+.shasum: 8944703367f7a243860c4c532a384279a3ade303
+
+$ npm pack todomvc-todo-ui@0.1.100 --cache "$dir/.cache"
+todomvc-todo-ui-0.1.100.tgz
 ```
 
-This round trip, publish then `npm view` then `npm pack` from a cold cache, was
-verified working.
+`--cache` pointing at a fresh directory is what makes this prove something.
+Without it npm can answer from `~/.npm` and never touch the registry. Note the
+tarball URL: it names the registry, not npmjs.org.
 
-## Known issue: incomplete packuments through the proxy cache
+## Where the proxy cache is still rough: partial packuments
 
-This is a real defect, currently open. It affects reads of **upstream** packages
-through an npm proxy-cache project. It does not affect packages you publish
-yourself.
+Everything above works. This is the one place where the proxy cache does not yet
+behave like npmjs.org, and it is worth knowing before you point a real build at
+it. It affects reads of **upstream** packages only, never the packages you
+publish yourself.
 
-**Symptom.** The packument that Harbor renders lists fewer versions than Harbor
-actually stores, and it advertises a `dist-tags.latest` that is not among the
-versions it lists. `npm install` then fails to resolve ranges that should
-resolve, with `ETARGET / No matching version found`. Retrying does not fix it.
+**Symptom.** For some upstream packages the packument Harbor renders lists fewer
+versions than npmjs.org publishes. `dist-tags.latest` is always reported, and it
+is always the true upstream latest, but the version it names is not always among
+the versions listed.
 
-**Observed reproduction**, against `left-pad`:
+Measured against the live instance, comparing what Harbor lists with what
+upstream publishes:
+
+| Package | Listed by Harbor | Published upstream | `latest` also listed |
+|---|---|---|---|
+| `left-pad` | 15 | 15 | yes |
+| `postcss` | 256 | 290 | yes |
+| `vue` | 238 | 587 | yes |
+| `fdir` | 6 | 45 | no |
+| `lodash` | 6 | 117 | no |
+| `vite` | 4 | 748 | no |
+
+The pattern behind those numbers is visible when you compare the listing with
+what the project actually stores. For `lodash` the two are identical:
 
 ```console
-# 1. Package never fetched before. This response is correct.
-$ curl -s https://8gcr.container-registry.dev/npm/todomvc-npm/left-pad \
-    | python3 -c 'import sys,json;d=json.load(sys.stdin);print(len(d["versions"]),d["dist-tags"])'
-15 {'latest': '1.3.0'}          # 1.3.0 is present in versions
+$ curl -s .../npm/todomvc-npm/lodash | jq -c '.versions|keys'
+["0.4.1","1.2.1","4.14.0","4.15.0","4.2.0","4.4.0"]
 
-# 2. Install a specific older version.
-$ npm install left-pad@1.1.0
-npm error notarget No matching version found for left-pad@1.1.0.
-
-# 3. Ask for the packument again. It has shrunk.
-$ curl -s https://8gcr.container-registry.dev/npm/todomvc-npm/left-pad \
-    | python3 -c 'import sys,json;d=json.load(sys.stdin);print(list(d["versions"]),d["dist-tags"])'
-['0.0.2', '0.0.3', '0.0.4'] {'latest': '1.3.0'}   # latest is not in the list
-
-# 4. Consequence.
-$ npm view left-pad@latest
-npm error 404 Not Found - GET .../left-pad/1.3.0
-
-# 5. But Harbor has all 15 versions stored.
 $ curl -su "admin:$PASS" \
-    "https://8gcr.container-registry.dev/api/v2.0/projects/todomvc-npm/repositories/npm%2Fleft-pad/artifacts" \
-    | python3 -c 'import sys,json;print([t["name"] for a in json.load(sys.stdin) for t in a["tags"]])'
-['0.0.0', '0.0.1', ..., '1.3.0']
+    ".../api/v2.0/projects/todomvc-npm/repositories/npm%2Flodash/artifacts?with_tag=true" \
+    | jq -r '[.[]|.tags[].name]|sort|join(" ")'
+0.4.1 1.2.1 4.14.0 4.15.0 4.2.0 4.4.0
 ```
 
-Step 5 is the important one. The data is present in the registry. The packument
-rendering is what is wrong.
+Those six are the versions somebody happened to install through this project.
+For these packages the listing is the local cache, not the upstream index.
 
-The same measurement on other packages, comparing what Harbor lists against what
-upstream actually publishes:
+**What this costs you.** A range resolves against whatever is listed; an exact
+pin of a version that is not listed fails:
 
-| Package | Versions listed by Harbor | Versions upstream |
-|---|---|---|
-| `fdir` | 17 | 45 |
-| `postcss` | 30 | 290 |
-| `vue` | 37 | 587 |
-| `lodash` | 16 | 117 |
-| `vite` | 33 | 748 |
+```console
+$ npm install vue@3.5.13
+npm error code ETARGET
+npm error notarget No matching version found for vue@3.5.13.
 
-In every one of these, `dist-tags.latest` was absent from `versions`.
+$ npm install vue@^3.5.13
+added 23 packages in 4s          # resolved 3.5.41, which is listed
 
-**Practical impact.** Installing a normal dependency tree through an npm
-proxy-cache project is not currently reliable. Any range that happens to need a
-version outside the truncated list fails, and which versions survive depends on
-what has been fetched.
+$ npm install lodash@4.17.21
+npm error code ETARGET
+npm error notarget No matching version found for lodash@4.17.21.
+```
 
-**What still works.** Publishing your own packages into the project, resolving
-them by exact version, and pulling them back. The npm parts of
-[the pipeline](06-pipeline.md) that matter to this demo are unaffected.
+That last one is the case to watch: `4.17.21` is the version most lockfiles in
+the world name, and it is absent from the listing even though upstream has it.
 
-**Workaround while it is open.** Resolve third-party dependencies from npmjs.org
-and use the Harbor project for your own packages:
+**What works regardless.** `npm ci` against this repository's own lockfile
+completes through the proxy, because every version it pins is one the project has
+already surfaced:
+
+```console
+$ cd apps/todo-ui && npm ci
+added 36 packages in 5s
+```
+
+Publishing your own packages, resolving them by exact version, and pulling them
+back are all unaffected: `todomvc-todo-ui` lists exactly the versions the
+registry stores.
+
+**If you need a cold lockfile to install today**, resolve third-party
+dependencies from npmjs.org and keep the Harbor project for your own packages:
 
 ```bash
 npm ci --registry=https://registry.npmjs.org
