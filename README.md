@@ -13,6 +13,8 @@ The artifact flow, the pipeline and the guide are the point.
 
 ![The TodoMVC app the pipeline builds](docs/images/todomvc-app.png)
 
+Only need Maven? Start with [Maven hosted and proxy repositories](docs/maven-hosted-and-proxy.md).
+
 ## What you will actually see
 
 One project per ecosystem, each acting as a pull-through cache for its upstream and as a
@@ -35,6 +37,7 @@ npmjs.org and the package your pipeline published:
 | [04: Maven](docs/04-maven.md) | The same four steps for Maven |
 | [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
+| [Maven quickstart](docs/maven-hosted-and-proxy.md) | Separate hosted and proxy projects, from empty setup |
 
 ## The five-minute path
 

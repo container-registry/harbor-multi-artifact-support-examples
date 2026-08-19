@@ -2,6 +2,8 @@
 
 [← npm](03-npm.md) · [Images and WIF →](05-images-wif.md)
 
+New setup? Start with [Maven hosted and proxy repositories](maven-hosted-and-proxy.md).
+
 Same shape as npm: one URL that both proxies Maven Central and hosts the jar this
 repository publishes.
 
