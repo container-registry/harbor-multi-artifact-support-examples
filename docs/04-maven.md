@@ -172,19 +172,27 @@ Force a cold local repository so that a hit proves the artifact travelled over t
 network:
 
 ```bash
-mvn -B -s apps/todo-api/.mvn/settings.xml \
+mvn -B -s apps/todo-api/.mvn/settings-upstream.xml \
   -Dmaven.repo.local="$(mktemp -d)" \
   dependency:get \
+  -DremoteRepositories="8gcr::::https://8gcr.container-registry.dev/maven/todomvc-maven" \
   -Dartifact=com.containerregistry.todo:todo-api:0.1.102
+```
+
+```console
+[INFO] Downloaded from 8gcr: .../com/containerregistry/todo/todo-api/0.1.102/todo-api-0.1.102.jar (54 MB)
+[INFO] BUILD SUCCESS
 ```
 
 `-Dmaven.repo.local` pointing at a fresh temp directory is the part that matters.
 Without it, `dependency:get` can be satisfied from `~/.m2` and prove nothing.
 
-Note what this command needs: `dependency:get` is itself a plugin, so a genuinely
-cold local repository has to resolve `maven-dependency-plugin` and its
-dependencies through the mirror before it can fetch your artifact. It exercises
-the proxy path as much as the native one.
+The mirror-less settings are deliberate. `dependency:get` is itself a plugin, so
+the mirrored settings would send this command's own plugin tree through the proxy
+cache, and a cache that cannot serve `maven-dependency-plugin` fails the check for
+a reason that has nothing to do with your artifact. `-DremoteRepositories` names
+the registry for the artifact alone; the `8gcr` id matches the `<server>` entry, so
+credentials still apply. The `Downloaded from 8gcr` line is the proof.
 
 ## Resolving through the proxy
 

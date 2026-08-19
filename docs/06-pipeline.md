@@ -364,7 +364,10 @@ if: inputs.publish
   `npm pack` the version just published. The temp directory means a cold npm
   cache.
 - **Maven**: `dependency:get` with `-Dmaven.repo.local="$(mktemp -d)"`. Without
-  that flag the request could be satisfied from `~/.m2` and prove nothing.
+  that flag the request could be satisfied from `~/.m2` and prove nothing. It runs
+  on the mirror-less settings with `-DremoteRepositories` naming the registry:
+  `dependency:get` is itself a plugin, and mirroring would make this check depend on
+  the proxy cache serving Maven's own plugin tree rather than on the jar coming back.
 
 The npm and Maven checks are skipped when the corresponding preflight output is
 false, so the job stays green while those endpoints are unroutable, and starts
