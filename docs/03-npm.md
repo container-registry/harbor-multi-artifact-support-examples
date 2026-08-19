@@ -37,9 +37,13 @@ key, which holds `base64("username:password")`:
 
 ```bash
 # base64 -w0 is GNU-only; macOS needs -b0. Piping through tr works on both.
-auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
+auth="$(printf '%s:%s' "$HARBOR_USER" "$HARBOR_PASS" | base64 | tr -d '\n')"   # local
+auth="$(printf 'jwt:%s' "$OIDC_JWT" | base64 | tr -d '\n')"                    # in CI
 echo "//8gcr.container-registry.dev/npm/todomvc-npm/:_auth=$auth" >> .npmrc
 ```
+
+The literal `jwt` username is only ignored when the password is an OIDC token. Use
+it with an ordinary password and the endpoint answers `401`.
 
 Two things to know:
 
@@ -108,7 +112,7 @@ sequenceDiagram
     Note over npm,H: next install of the same version is served locally
 ```
 
-Tarball URLs in the packument are rewritten to the instance's external URL, so
+Tarball URLs in the packument are rewritten to the host the request arrived on, so
 the client never contacts npmjs.org directly. That is the whole point: one
 egress path, one audit trail, one credential.
 
@@ -120,11 +124,16 @@ under this `.npmrc` still fetches through Harbor.
 ## Publish: the native path
 
 ```console
+$ npm run build                                  # populates dist/, which is what ships
 $ npm version 0.1.100 --no-git-tag-version
 $ npm publish
 npm notice Publishing to https://8gcr.container-registry.dev/npm/todomvc-npm/
 + todomvc-todo-ui@0.1.100
 ```
+
+Do not skip the build. `files` in `package.json` is `["dist","README.md"]` and `dist`
+is not in git, so publishing without it succeeds and ships a package with nothing in
+it, at a version that is now immutable. `npm pack --dry-run` lists what would go in.
 
 The package lands in the same project it resolves from, as
 `todomvc-npm/npm/todomvc-todo-ui`.
@@ -176,6 +185,17 @@ Everything above works. This is the one place where the proxy cache does not yet
 behave like npmjs.org, and it is worth knowing before you point a real build at
 it. It affects reads of **upstream** packages only, never the packages you
 publish yourself.
+
+**Check whether it applies to you first.** Observed on
+`8gcr.container-registry.dev` (`2.16.0-ca75082c`) on 2026-08-19, and *not* present
+on every build:
+
+```bash
+curl -s .../npm/todomvc-npm/lodash        | jq '.versions|length'
+curl -s https://registry.npmjs.org/lodash | jq '.versions|length'
+```
+
+If the two agree, the rest of this section does not apply to your instance.
 
 **Symptom.** For some upstream packages the packument Harbor renders lists fewer
 versions than npmjs.org publishes. `dist-tags.latest` is always reported, and it

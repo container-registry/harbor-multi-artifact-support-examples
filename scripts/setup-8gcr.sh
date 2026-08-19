@@ -230,16 +230,25 @@ ok "granting on: $(echo "$PROJECTS" | tr '\n' ' ')"
 ROBOT_BODY="{\"name\":\"todomvc-ci\",\"description\":\"Keyless CI robot (GitHub Actions WIF)\",\"level\":\"system\",\"duration\":-1,\"federatedidp_id\":$IDP_ID,\"permissions\":$PERMS}"
 post /robots "$ROBOT_BODY" "robot todomvc-ci" || true
 
+# Harbor stores a system robot under a configurable prefix, "robot$" by default,
+# so the name to look up is not the name that was requested. Ask for the prefix
+# rather than assuming one; guessing wrong finds nothing and aborts the script
+# one step before the claim rules, leaving a robot no token can assume.
+ROBOT_PREFIX="$(curl -qsS "${AUTH[@]}" "$API/configurations" |
+  python3 -c "import sys,json;print(json.load(sys.stdin).get('robot_name_prefix',{}).get('value',''))")"
 ROBOT_ID="$(curl -qsS "${AUTH[@]}" "$API/robots" |
-  python3 -c "import sys,json;print(next((str(r['id']) for r in json.load(sys.stdin) if r['name'] in ('robot_todomvc-ci','todomvc-ci')),''))")"
-[ -n "$ROBOT_ID" ] || die "robot missing"
+  PREFIX="$ROBOT_PREFIX" python3 -c "
+import sys,json,os
+want={os.environ['PREFIX']+'todomvc-ci','todomvc-ci'}
+print(next((str(r['id']) for r in json.load(sys.stdin) if r['name'] in want),''))")"
+[ -n "$ROBOT_ID" ] || die "robot ${ROBOT_PREFIX}todomvc-ci not found in GET /robots"
 
 # Reconcile rather than assume. A 409 above only says the name is taken, not that
 # the robot grants what this script wants.
 #
-# The update must carry the robot's STORED name and level. Harbor prefixes system
-# robots with "robot_", so echoing back the name that was requested at creation
-# time is rejected with "cannot update the level or name of robot".
+# The update must carry the robot's STORED name and level, prefix included, so
+# echoing back the name that was requested at creation time is rejected with
+# "cannot update the level or name of robot".
 RECONCILE_BODY="$(curl -qsS "${AUTH[@]}" "$API/robots/$ROBOT_ID" |
   PERMS="$PERMS" python3 -c "
 import json,os,sys

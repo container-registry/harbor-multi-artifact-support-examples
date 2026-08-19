@@ -40,12 +40,13 @@ Both return `201`. Harbor health-checks them, and both report `healthy`.
 
 ![Registry endpoints in the portal](images/portal-registries.png)
 
-The provider dropdown in **Administration → Registries → New Endpoint** does not
+The provider dropdown in **Administration → Registries → New Endpoint** may not
 offer npm or Maven. That list comes from `GET /api/v2.0/replication/adapters`,
 which is filtered by the `REPLICATION_ADAPTER_WHITELIST` environment variable on
-core rather than by what the build supports; the same list omits `quay`, `gitlab`
-and `dtr` too. `POST /registries` accepts the types regardless. Create these two
-endpoints with the API, not the UI.
+core rather than by what the build supports, so on a deployment that has not been
+given the package formats the same list also omits `quay`, `gitlab` and `dtr`.
+`POST /registries` accepts the types either way, which is why this page uses the
+API throughout.
 
 Note the endpoint ids for the next step:
 
@@ -124,6 +125,10 @@ keeps the JWKS current. GitHub rotates its signing keys, and with online
 validation that rotation needs no action here. Offline validation would require
 you to paste and maintain the keys.
 
+Both `openid_config_url` and `issuer` must be HTTPS; anything else is rejected with
+`openid_config_url must use HTTPS protocol`. An issuer you run yourself in a lab
+therefore has to go in as `offline_validation:true` with the keys supplied directly.
+
 The IdP is visible under **Administration → Identity Providers**.
 
 ## 4. A robot account with no secret
@@ -178,10 +183,13 @@ short of push on the package projects, and the pipeline would fail with a 401
 against projects that visibly exist.
 
 One quirk when reconciling: the update has to carry the robot's **stored** name.
-Harbor prefixes system robots with `robot_`, so sending back the name you asked
-for at creation time is rejected with `cannot update the level or name of robot`.
+Harbor prefixes system robots with the configured `robot_name_prefix`, `robot$` by
+default, so sending back the name you asked for at creation time is rejected with
+`cannot update the level or name of robot`.
 
-The API returns the robot's id, and the account appears as `robot_todomvc-ci`.
+That prefix is also what you have to look the robot up by, and guessing it wrong
+finds nothing. Read it from `GET /api/v2.0/configurations`, as the script does,
+rather than assuming the default.
 
 ## 5. Claim rules
 
@@ -216,8 +224,10 @@ The two rules do different jobs:
 
 Using the registry hostname as the audience is deliberate. GitHub will mint a
 token with whatever `aud` the workflow asks for, so a token minted for some other
-service cannot be replayed against this registry, and vice versa. The pipeline
-requests exactly this audience; see
+service cannot be replayed against this registry, and vice versa. The script takes
+it from `HARBOR_URL`'s host, port included, so an instance on a non-default port
+gets an audience like `registry.example.com:8180` and the workflow has to ask for
+exactly that string. The pipeline requests exactly this audience; see
 [`.github/actions/8gcr-token/action.yml`](../.github/actions/8gcr-token/action.yml).
 
 The `repository` claim is GitHub's `owner/repo`. Tokens from any other repository
@@ -234,11 +244,11 @@ success to `curl -f` and like a parse error to npm.
 $ curl -su "admin:$PASS" "$HARBOR_URL/npm/todomvc-npm/-/whoami"
 {"username":"admin"}
 
-$ curl -s "$HARBOR_URL/maven/todomvc-maven/com/containerregistry/todo/todo-api/maven-metadata.xml"
+$ curl -s "$HARBOR_URL/maven/todomvc-maven/org/apache/commons/commons-lang3/maven-metadata.xml"
 <?xml version="1.0" encoding="UTF-8"?>
 <metadata>
-  <groupId>com.containerregistry.todo</groupId>
-  <artifactId>todo-api</artifactId>
+  <groupId>org.apache.commons</groupId>
+  <artifactId>commons-lang3</artifactId>
   ...
 
 $ curl -so /dev/null -w '%{http_code}\n' "$HARBOR_URL/v2/"
@@ -246,7 +256,10 @@ $ curl -so /dev/null -w '%{http_code}\n' "$HARBOR_URL/v2/"
 ```
 
 `401` from `/v2/` is correct: that is the OCI distribution API asking for a
-token, which is what `docker login` answers.
+token, which is what `docker login` answers. The Maven check deliberately asks for
+an upstream coordinate rather than one of your own: nothing has been published yet
+at this point, and an empty project answers `404` for its own artifacts while the
+proxy cache is working perfectly.
 
 The equivalent check the pipeline runs before it publishes anything is in
 [06-pipeline.md](06-pipeline.md#preflight).

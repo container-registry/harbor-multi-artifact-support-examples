@@ -69,12 +69,22 @@ covered too, not just dependencies:
 </mirror>
 ```
 
-Install, publish, read back:
+Install, publish, read back. `npm run build` is not optional: `package.json` ships
+`files: ["dist"]`, `dist` is not in git, and publishing without it succeeds with an
+empty package at a version you can never reuse.
 
 ```bash
-cd apps/todo-ui  && npm ci && npm publish
+cd apps/todo-ui  && npm ci && npm run build && npm publish
 cd apps/todo-api && mvn -B -s .mvn/settings.xml deploy
 ```
+
+Needs JDK 21, Maven 3.9, Node 20 and Docker. `docker build` needs none of them, since
+`apps/todo-api/Dockerfile` builds inside `maven:3.9-eclipse-temurin-21`.
+
+The setup script takes the registry URL as an argument; the clients do not. Pointing
+this repository at your own instance means editing the URL, scheme included, in six
+committed files — [06-pipeline.md](docs/06-pipeline.md#running-it-against-your-own-registry)
+step 3 lists them.
 
 ## How the keyless part works
 
