@@ -386,7 +386,15 @@ jobs:
         run: |
           # -Dmaven.repo.local forces a cold cache, so a hit proves the artifact
           # really came back over the network.
-          mvn -B -s apps/todo-api/.mvn/settings.xml \
+          #
+          # Deliberately NOT the mirrored settings. dependency:get is itself a plugin,
+          # so a mirror sends this job's own plugin tree through the proxy cache, and
+          # what is being verified here is that the published jar can be pulled back --
+          # not that the cache can serve Maven's plugins. Naming the registry as the
+          # remote repository keeps the artifact coming from it; the id matches the
+          # <server> entry, so credentials still apply.
+          mvn -B -s apps/todo-api/.mvn/settings-upstream.xml \
             -Dmaven.repo.local="$(mktemp -d)" \
             dependency:get \
+            -DremoteRepositories="8gcr::::$REGISTRY_SCHEME://$REGISTRY/maven/$MAVEN_PROJECT" \
             -Dartifact="com.containerregistry.todo:todo-api:${{ needs.maven.outputs.version }}"
