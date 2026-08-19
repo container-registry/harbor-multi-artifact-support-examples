@@ -48,6 +48,10 @@ portal. Ask the administrator to route `/maven/` to Harbor core.
 6. Select public or private access.
 7. Create the project.
 
+![New Harbor project dialog configured for a hosted Maven project](images/maven-create-hosted-project.png)
+
+*Callouts — 1 Project name · 2 Public access · 3 Leave Proxy Cache off · 4 Create project*
+
 Use this repository URL:
 
 ```text
@@ -218,6 +222,11 @@ Harbor administrator:
 6. Test the connection.
 7. Save the endpoint.
 
+![New Harbor registry endpoint configured for Maven Central](images/maven-create-endpoint.png)
+
+*Callouts — 1 Provider · 2 Endpoint name · 3 Maven Central URL · 4 Verify remote
+certificate · 5 Test connection*
+
 Create the proxy project:
 
 1. Open **Projects**.
@@ -227,6 +236,11 @@ Create the proxy project:
 5. Select `maven-central`.
 6. Select public or private access.
 7. Create the project.
+
+![New Harbor project dialog configured as a Maven proxy cache](images/maven-create-proxy-project.png)
+
+*Callouts — 1 Project name · 2 Enable Proxy Cache · 3 Select Maven endpoint ·
+4 Leave client publishing off · 5 Create project*
 
 For a private proxy, add the account used earlier as a Guest, or grant proxy pull
 to the same system robot.
