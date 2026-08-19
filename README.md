@@ -1,12 +1,12 @@
-# One registry for npm, Maven and container images
+# 8gcr Harbor registry for npm, Maven and container images
 
 A working example of using a single [8gcr](https://container-registry.com/8gcr) / Harbor
 instance as the only artifact store a project needs:
 
 - **proxy** npm packages from npmjs.org and Maven artifacts from Maven Central through it,
-- **publish** your own npm package and Maven jar back into it,
-- **push and pull container images** to it,
-- from one GitHub Actions pipeline, with **no registry secret stored anywhere**.
+- **publish** your own npm package and Maven jar back into Harbor,
+- **push and pull container images**,
+- From one GitHub Actions pipeline, with **no registry secret stored anywhere**.
 
 The two TodoMVC apps in `apps/` exist only to give the pipeline something real to build.
 The artifact flow, the pipeline and the guide are the point.
