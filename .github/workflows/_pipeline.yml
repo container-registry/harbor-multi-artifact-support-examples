@@ -36,7 +36,7 @@ jobs:
   # have the feature compiled in and still not route /npm/ and /maven/ to it.
   # When that happens the request lands on the web UI and comes back as HTML,
   # which npm reports as a baffling JSON parse error. Detecting it here turns a
-  # confusing mid-build failure into one clear line. See docs/00-environment.md.
+  # confusing mid-build failure into one clear line.
   # ---------------------------------------------------------------------------
   preflight:
     runs-on: ubuntu-latest
@@ -53,18 +53,21 @@ jobs:
             read -r code ct <<<"$(curl -sS --connect-timeout 10 --max-time 30 \
               -o /dev/null -w '%{http_code} %{content_type}' "$1" || echo '000 -')"
 
-            # The web UI answers 200 text/html for unrouted package paths, so the
-            # content type alone is not enough; a JSON error body is still an error.
+            # The web UI answers 200 text/html for any path it does not recognise,
+            # so the content type is the routing signal: core answers these paths
+            # as JSON, XML or plain text and never as HTML.
             case "$ct" in *text/html*) echo "false"; return ;; esac
 
-            # Only an anonymous 200 counts. A 401 would prove the endpoint is there,
-            # but the image builds resolve dependencies inside `docker build`, which
-            # gets no credentials, so routing them at a project that demands
-            # authentication would just move the failure. This demo keeps its
-            # package projects public; see docs/06-pipeline.md.
+            # 404 counts as routed. A Maven project has nothing at its own root
+            # even when it is working, and answers 19 bytes of text/plain there,
+            # which only the Maven handler produces. 401 does not count: the image
+            # builds resolve dependencies inside `docker build`, which gets no
+            # credentials, so routing them at a project that demands authentication
+            # would just move the failure. This demo keeps its package projects
+            # public; see docs/06-pipeline.md.
             case "$code" in
-              200) echo "true"  ;;
-              *)   echo "false" ;;
+              200|404) echo "true"  ;;
+              *)       echo "false" ;;
             esac
           }
 
@@ -99,11 +102,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Deliberately not naming a single cause: the probe also fails on a
-          # timeout or a JSON error, and pointing operators at the routing fix for
-          # an unrelated outage wastes their time. The table above carries the
-          # observed status and content type.
-          [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped; docs/00-environment.md covers the routing case."
-          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped; docs/00-environment.md covers the routing case."
+          # timeout, on a 401, or on a JSON error, and pointing operators at the
+          # routing fix for an unrelated outage wastes their time. The table above
+          # carries the observed status and content type.
+          [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped."
+          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped."
 
   # ---------------------------------------------------------------------------
   # Maven: resolve every dependency THROUGH the registry, then publish INTO it.
@@ -153,9 +156,9 @@ jobs:
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
           # Same reasoning as the npm job: a reachable endpoint is not proof it can
-          # serve a full tree. Maven proxy cold fetches could not be reproduced at
-          # all (see docs/04-maven.md), so a failure here falls back rather than
-          # blocking the build.
+          # serve a full tree. The Maven proxy stops fetching cold coordinates and
+          # reports it as a plain 404 (see docs/04-maven.md), so a failure here
+          # falls back rather than blocking the build.
           # The settings file that actually worked is recorded, so the publish
           # step below resolves its own plugins the same way. Publishing through a
           # mirror that just failed would fail again on a cold runner.
