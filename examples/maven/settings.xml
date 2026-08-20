@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>harbor-proxy</id>
+      <name>Harbor Maven Central proxy</name>
+      <url>https://harbor.example.com/maven/maven-proxy</url>
+      <mirrorOf>*,!harbor-hosted</mirrorOf>
+    </mirror>
+  </mirrors>
+  <servers>
+    <server>
+      <id>harbor-hosted</id>
+      <username>${env.HARBOR_USERNAME}</username>
+      <password>${env.HARBOR_PASSWORD}</password>
+    </server>
+    <server>
+      <id>harbor-proxy</id>
+      <username>${env.HARBOR_USERNAME}</username>
+      <password>${env.HARBOR_PASSWORD}</password>
+    </server>
+  </servers>
+</settings>

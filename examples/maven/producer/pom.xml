@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.harbor.guide</groupId>
+  <artifactId>demo</artifactId>
+  <version>1.0.0</version>
+
+  <distributionManagement>
+    <repository>
+      <id>harbor-hosted</id>
+      <name>Harbor releases</name>
+      <url>https://harbor.example.com/maven/maven-hosted</url>
+    </repository>
+    <snapshotRepository>
+      <id>harbor-hosted</id>
+      <name>Harbor snapshots</name>
+      <url>https://harbor.example.com/maven/maven-hosted</url>
+    </snapshotRepository>
+  </distributionManagement>
+</project>

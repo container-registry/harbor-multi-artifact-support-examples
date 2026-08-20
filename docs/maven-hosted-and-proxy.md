@@ -12,6 +12,12 @@ This guide starts with an empty Maven setup. It creates two Harbor projects:
 Keep these projects separate at first. It makes permissions and failures easier
 to understand.
 
+Choose your path:
+
+- **Your packages only:** sections 1–5.
+- **Maven Central cache only:** sections 6–8.
+- **Both:** follow all sections.
+
 ## Before starting
 
 You need:
@@ -21,6 +27,9 @@ You need:
 - a Harbor account with push and pull access,
 - Java and Maven.
 
+Commands use Bash on Linux or macOS. In PowerShell, set credentials with
+`$env:HARBOR_USERNAME='...'` and `$env:HARBOR_PASSWORD='...'`.
+
 Check the client tools:
 
 ```bash
@@ -29,6 +38,13 @@ mvn -version
 ```
 
 Replace `harbor.example.com` in every example with your Harbor hostname.
+
+Want complete files instead of editing XML? Download the
+[Maven settings](../examples/maven/settings.xml),
+[producer POM](../examples/maven/producer/pom.xml), and
+[consumer POM](../examples/maven/consumer/pom.xml), then replace the hostname.
+The settings file covers both paths. For hosted-only use, remove its `<mirrors>`
+block and `harbor-proxy` server entry.
 
 If **Maven Central** is missing from the registry provider list, ask the Harbor
 administrator to allow Maven in the registry provider list. The API may still
@@ -65,9 +81,19 @@ For automation limited to this project, create a project robot account instead.
 Grant repository push and pull. Copy the exact robot username and secret when
 Harbor displays them.
 
+![Harbor robot account permissions for Maven publishing](images/maven-robot-permissions.png)
+
+*Callouts — 1 Repository permissions · 2 Pull · 3 Push · 4 Finish*
+
 This guide later uses the same credential for two projects. Use one human account
 that belongs to both projects, or a system robot with push and pull on
 `maven-hosted` and pull on `maven-proxy`. A project robot belongs to one project.
+
+| Task | Minimum access |
+|---|---|
+| Publish to `maven-hosted` | Developer, or robot repository push and pull |
+| Read from `maven-hosted` | Guest, or robot repository pull |
+| Read from `maven-proxy` | Guest, or robot repository pull |
 
 ## 2. Configure Maven credentials
 
@@ -104,7 +130,7 @@ Need a sample package? Generate one with known coordinates:
 
 ```bash
 mvn -B archetype:generate \
-  -DgroupId=com.example \
+  -DgroupId=com.example.harbor.guide \
   -DartifactId=demo \
   -Dversion=1.0.0 \
   -DarchetypeArtifactId=maven-archetype-quickstart \
@@ -138,7 +164,7 @@ mvn deploy
 ```
 
 Expected result: `BUILD SUCCESS`. Harbor shows the package under
-`maven-hosted`.
+`maven-hosted` as `maven/com/example/harbor/guide/demo`.
 
 Release versions are immutable. If changed files are deployed again with the
 same version, Harbor returns `409 Conflict`. Increase the version.
@@ -159,6 +185,10 @@ mvn deploy
 
 Maven sends the snapshot to `<snapshotRepository>`. Consumers can request
 `1.1.0-SNAPSHOT`; Maven resolves the current timestamped build.
+
+![Release and snapshot versions in a Harbor Maven repository](images/maven-hosted-result.png)
+
+*Callouts — 1 Maven repository path · 2 Release · 3 Snapshot*
 
 ## 5. Consume a hosted package
 
@@ -191,7 +221,7 @@ package, use its actual `groupId`, `artifactId`, and `version`.
 
 <dependencies>
   <dependency>
-    <groupId>com.example</groupId>
+    <groupId>com.example.harbor.guide</groupId>
     <artifactId>demo</artifactId>
     <version>1.0.0</version>
   </dependency>
@@ -202,6 +232,13 @@ Resolve it:
 
 ```bash
 mvn dependency:resolve
+```
+
+To consume the snapshot, change the dependency version to
+`1.1.0-SNAPSHOT`, then force a metadata refresh:
+
+```bash
+mvn -U dependency:resolve
 ```
 
 Use a clean local cache when testing the repository itself:
@@ -239,11 +276,16 @@ Create the proxy project:
 
 ![New Harbor project dialog configured as a Maven proxy cache](images/maven-create-proxy-project.png)
 
-*Callouts — 1 Project name · 2 Enable Proxy Cache · 3 Select Maven endpoint ·
+*Proxy Cache is enabled (green). Callouts — 1 Project name · 3 Maven endpoint ·
 4 Leave client publishing off · 5 Create project*
 
-For a private proxy, add the account used earlier as a Guest, or grant proxy pull
-to the same system robot.
+For a private proxy, add an account as a Guest or grant a system robot repository
+pull. Export that credential if you skipped section 2:
+
+```bash
+export HARBOR_USERNAME='your-user-or-exact-robot-name'
+export HARBOR_PASSWORD='your-password-or-robot-secret'
+```
 
 Use this proxy URL:
 
@@ -253,8 +295,8 @@ https://harbor.example.com/maven/maven-proxy
 
 ## 7. Route Maven through the proxy
 
-Add a mirror to `~/.m2/settings.xml`. Keep the hosted server entry from the
-earlier example.
+Add a mirror to `~/.m2/settings.xml`. When following both paths, keep the hosted
+server entry. For proxy-only use, remove it.
 
 ```xml
 <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
@@ -300,8 +342,11 @@ Resolve a Maven Central package through Harbor with an empty local cache:
 
 ```bash
 mvn -U -Dmaven.repo.local="$(mktemp -d)" dependency:get \
-  -Dartifact=org.apache.commons:commons-lang3:3.17.0
+  -Dartifact=org.apache.commons:commons-collections4:4.4
 ```
+
+The empty local cache proves Maven contacted Harbor instead of returning a local
+file.
 
 Expected result:
 
@@ -310,8 +355,19 @@ Expected result:
 3. Package appears in the `maven-proxy` project.
 4. Later requests can use the Harbor copy.
 
-The local cache must be empty when testing. Otherwise Maven may return a local
-file without contacting Harbor.
+![Maven Central package cached in a Harbor proxy project](images/maven-proxy-result.png)
+
+*Callouts — 1 Cached Maven repository · 2 Cached version*
+
+Check the exact client route without relying on Maven's local cache:
+
+```bash
+curl -fsS -o /dev/null -w '%{http_code}\n' \
+  https://harbor.example.com/maven/maven-proxy/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.pom
+```
+
+For a private proxy, add
+`-u "$HARBOR_USERNAME:$HARBOR_PASSWORD"` after `curl`.
 
 ## Common errors
 
@@ -325,6 +381,25 @@ file without contacting Harbor.
 | `409 Conflict` | Release version already contains different files | Publish a new version |
 | Cached “not found” result | Maven stored an earlier failure | Retry with `mvn -U` or use a clean local cache |
 | TLS trust error | Maven does not trust Harbor certificate | Install the Harbor CA in the Java truststore; do not disable TLS checks |
+
+For a private CA, ask your administrator for `harbor-ca.crt`, then import it into
+the Java installation Maven uses:
+
+```bash
+sudo keytool -importcert -trustcacerts \
+  -alias harbor -file harbor-ca.crt -cacerts
+```
+
+Confirm the Java path with `mvn -version`. The command prompts for the truststore
+password; do not place it in shell history.
+
+## Clean up the example
+
+Delete `maven-hosted` and `maven-proxy` under **Projects**, then delete
+`maven-central` under **Administration → Registries**. This removes the sample
+packages and cached files. Delete the generated `demo` and `consumer` directories
+from your workstation if you no longer need them. If Harbor blocks project
+deletion, open **Repositories** and delete the sample repository first.
 
 ## Next
 
