@@ -184,7 +184,8 @@ publish yourself.
 
 **Check whether it applies to you first.** Observed on
 `8gcr.container-registry.dev` (`2.16.0-ca75082c`) on 2026-08-19, and *not* present
-on every build:
+on every build — a cold install through a local dev build did **not** reproduce it
+on 2026-08-31, so re-measure your instance before working around it:
 
 ```bash
 curl -s .../npm/todomvc-npm/lodash        | jq '.versions|length'

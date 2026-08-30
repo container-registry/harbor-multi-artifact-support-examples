@@ -236,8 +236,10 @@ the same path serves `200` from Maven Central.
 **Check whether it applies to you first.** Observed on
 `8gcr.container-registry.dev` (`2.16.0-ca75082c`) on 2026-08-19 and tracked as
 [8gcr#345](https://github.com/container-registry/8gcr/issues/345); it is not
-present on every build. Run one cold `mvn verify` through the mirror, then ask for
-a coordinate that build did not touch:
+present on every build — a cold `mvn verify` (~1.4k requests) through a local dev
+build completed clean on 2026-08-31 without tripping it, so re-measure your
+instance before reaching for the fallback. Run one cold `mvn verify` through the
+mirror, then ask for a coordinate that build did not touch:
 
 ```bash
 curl -so /dev/null -w '%{http_code}\n' \
