@@ -121,3 +121,4 @@ This repository uses `jwt` by convention.
 - [04-maven.md](04-maven.md): Maven, the same round trip
 - [05-images-wif.md](05-images-wif.md): keyless image push and pull
 - [06-pipeline.md](06-pipeline.md): the whole thing in CI
+- [07-local-dev.md](07-local-dev.md): the same flows against a local `task dev:up` Harbor

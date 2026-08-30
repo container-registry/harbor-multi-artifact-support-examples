@@ -398,3 +398,4 @@ No secret needs to be added to the repository. That is the entire point.
 - [03-npm.md](03-npm.md)
 - [04-maven.md](04-maven.md)
 - [05-images-wif.md](05-images-wif.md)
+- [07-local-dev.md](07-local-dev.md)

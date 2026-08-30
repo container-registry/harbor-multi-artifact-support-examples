@@ -83,7 +83,7 @@ Needs JDK 21, Maven 3.9, Node 20 and Docker. `docker build` needs none of them, 
 `apps/todo-api/Dockerfile` builds inside `maven:3.9-eclipse-temurin-21`.
 
 The setup script takes the registry URL as an argument; the clients do not. Pointing
-this repository at your own instance means editing the URL, scheme included, in six
+this repository at your own instance means editing the URL, scheme included, in five
 committed files — [06-pipeline.md](docs/06-pipeline.md#running-it-against-your-own-registry)
 step 3 lists them.
 
