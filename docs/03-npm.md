@@ -21,14 +21,10 @@ The `_auth` key below has to name this same URL, trailing slash included, since
 npm attaches credentials by URI prefix. `always-auth=true` makes npm send them on
 tarball downloads too, not only on metadata requests.
 
-`package.json` pins the publish target separately, so a stray global registry
-setting cannot redirect a publish:
-
-```json
-"publishConfig": {
-  "registry": "https://8gcr.container-registry.dev/npm/todomvc-npm/"
-}
-```
+The same `registry=` line is also the publish target — there is deliberately no
+`publishConfig` in `package.json`, so `.npmrc` is the single source of truth for
+reads and writes. Retargeting the whole flow (say, at a local dev instance, see
+[07-local-dev.md](07-local-dev.md)) means editing exactly one file.
 
 ## Authenticate
 

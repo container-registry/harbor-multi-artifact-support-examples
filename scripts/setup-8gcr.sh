@@ -172,6 +172,15 @@ else
 fi
 post /projects '{"project_name":"todomvc","metadata":{"public":"true"}}' "project todomvc (OCI images)" || true
 
+# Local dev instances usually have no GitHub OIDC story (and may not have the
+# commercial identity-provider feature enabled) - registries and projects above
+# are all they need. SKIP_WIF=1 stops here.
+if [ "${SKIP_WIF:-}" = "1" ]; then
+  say "SKIP_WIF=1 - skipping federated identity provider and robot"
+  ok "registries and projects provisioned"
+  exit 0
+fi
+
 # ---------------------------------------------------------------------------
 # 3. Federated identity provider - trust GitHub's OIDC issuer
 # ---------------------------------------------------------------------------

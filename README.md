@@ -35,6 +35,7 @@ npmjs.org and the package your pipeline published:
 | [04: Maven](docs/04-maven.md) | The same four steps for Maven |
 | [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
+| [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
 
 ## The five-minute path
 

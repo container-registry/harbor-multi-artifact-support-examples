@@ -1,0 +1,31 @@
+<!-- Mirror-of-everything settings for a LOCAL Harbor dev instance
+     (task dev:up, plain HTTP on localhost:8080).
+
+     settings-local.xml itself is gitignored (it's yours to edit), so copy
+     this example first. Same shape as settings.xml, different endpoint; use
+     together with the matching deploy override so reads and writes hit the
+     same instance:
+
+       cp .mvn/settings-local.xml.example .mvn/settings-local.xml
+       export HARBOR_USERNAME=admin HARBOR_PASSWORD=Harbor12345
+       mvn -B -s .mvn/settings-local.xml verify
+       mvn -B -s .mvn/settings-local.xml deploy -Dharbor.url=http://localhost:8080
+
+     See docs/07-local-dev.md for the full walkthrough. -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+  <mirrors>
+    <mirror>
+      <id>8gcr</id>
+      <name>Local Harbor dev (multi-format Maven)</name>
+      <mirrorOf>*</mirrorOf>
+      <url>http://localhost:8080/maven/todomvc-maven</url>
+    </mirror>
+  </mirrors>
+  <servers>
+    <server>
+      <id>8gcr</id>
+      <username>${env.HARBOR_USERNAME}</username>
+      <password>${env.HARBOR_PASSWORD}</password>
+    </server>
+  </servers>
+</settings>
