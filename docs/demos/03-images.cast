@@ -1,0 +1,12 @@
+{"version":3,"term":{"cols":100,"rows":30},"timestamp":1788160043,"idle_time_limit":2.0,"command":"bash /tmp/claude-1000/-var-home-bupd-code-harbor--worktrees-8gcr-multi-project/b878d917-0729-4da8-9e1c-e74a38bd2c2b/scratchpad/demos/03-images.sh","env":{"SHELL":"/bin/bash"}}
+[0.005, "o", "\r\n\u001b[2m# Container images land in the todomvc project - plain OCI, same registry.\u001b[0m\r\n"]
+[1.001, "o", "\u001b[1;32m$\u001b[0m \u001b[1;37mpodman build -q -t localhost:8080/todomvc/todo-ui:demo apps/todo-ui\u001b[0m\r\n"]
+[5.373, "o", "a377cefec9b15668ee748c4518e9320d62c0f695cbfba629df2119311f90ea2d\r\n"]
+[0.410, "o", "\u001b[1;32m$\u001b[0m \u001b[1;37mpodman login -u admin -p Harbor12345 --tls-verify=false localhost:8080\u001b[0m\r\n"]
+[0.740, "o", "Login Succeeded!\r\n"]
+[0.005, "o", "\u001b[1;32m$\u001b[0m \u001b[1;37mpodman push --tls-verify=false localhost:8080/todomvc/todo-ui:demo 2>&1 | tail -2\u001b[0m\r\n"]
+[1.973, "o", "Copying config sha256:a377cefec9b15668ee748c4518e9320d62c0f695cbfba629df2119311f90ea2d\r\nWriting manifest to image destination\r\n"]
+[0.000, "o", "\r\n\u001b[2m# Round-trip: forget the local copy, pull it back from Harbor.\u001b[0m\r\n"]
+[1.002, "o", "\u001b[1;32m$\u001b[0m \u001b[1;37mpodman rmi localhost:8080/todomvc/todo-ui:demo >/dev/null && podman pull --tls-verify=false localhost:8080/todomvc/todo-ui:demo 2>&1 | tail -1\u001b[0m\r\n"]
+[1.251, "o", "a377cefec9b15668ee748c4518e9320d62c0f695cbfba629df2119311f90ea2d\r\n"]
+[0.000, "x", "0"]

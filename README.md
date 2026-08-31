@@ -37,6 +37,7 @@ npmjs.org and the package your pipeline published:
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
 | [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
 | [08: Homebrew](docs/08-homebrew.md) | brew metadata + bottles through one proxy project |
+| [Recorded demos](docs/demos/README.md) | Every flow above, recorded end to end against a fresh instance |
 
 ## The five-minute path
 
