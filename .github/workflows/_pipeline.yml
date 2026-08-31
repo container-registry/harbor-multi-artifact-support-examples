@@ -112,6 +112,20 @@ jobs:
                  npm_obs="$npm_obs; pinned tarball vue-$vue_ver.tgz: $tarball_obs" ;;
             esac
           fi
+          # Same reasoning for Maven: the routing probe counts a 404 as routed
+          # (a healthy Maven project answers 404 at its root), which also lets a
+          # feature-gate outage - every GAV 404s - through as "ready". Fetch a
+          # real artifact through the pull-through cache before believing it.
+          if [ "$maven_ready" = "true" ]; then
+            gav_url="$maven_url/junit/junit/4.13.2/junit-4.13.2.pom"
+            gav_obs="$(observe "$gav_url")"
+            case "$gav_obs" in
+              200*) : ;;
+              *) maven_ready="false"
+                 maven_obs="$maven_obs; pull-through junit-4.13.2.pom: $gav_obs" ;;
+            esac
+          fi
+
           echo "npm_ready=$npm_ready"   >> "$GITHUB_OUTPUT"
           echo "maven_ready=$maven_ready" >> "$GITHUB_OUTPUT"
 
@@ -127,7 +141,7 @@ jobs:
           # routing fix for an unrelated outage wastes their time. The table above
           # carries the observed status and content type.
           [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint is not serving packages (routing gap or degraded proxy cache - see the Observed column in the job summary). Publishing is skipped; builds resolve from npmjs.org."
-          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped."
+          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint is not serving artifacts (routing gap or degraded proxy - see the Observed column in the job summary). Publishing is skipped; builds resolve upstream."
 
   # ---------------------------------------------------------------------------
   # Maven: resolve every dependency THROUGH the registry, then publish INTO it.
