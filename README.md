@@ -36,6 +36,7 @@ npmjs.org and the package your pipeline published:
 | [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
 | [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
+| [08: Homebrew](docs/08-homebrew.md) | brew metadata + bottles through one proxy project |
 
 ## The five-minute path
 
