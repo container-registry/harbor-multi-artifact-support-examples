@@ -35,6 +35,7 @@ npmjs.org and the package your pipeline published:
 | [04: Maven](docs/04-maven.md) | The same four steps for Maven |
 | [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
+| [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
 | [08: Homebrew](docs/08-homebrew.md) | brew metadata + bottles through one proxy project |
 
 ## The five-minute path
@@ -83,7 +84,7 @@ Needs JDK 21, Maven 3.9, Node 20 and Docker. `docker build` needs none of them, 
 `apps/todo-api/Dockerfile` builds inside `maven:3.9-eclipse-temurin-21`.
 
 The setup script takes the registry URL as an argument; the clients do not. Pointing
-this repository at your own instance means editing the URL, scheme included, in six
+this repository at your own instance means editing the URL, scheme included, in five
 committed files — [06-pipeline.md](docs/06-pipeline.md#running-it-against-your-own-registry)
 step 3 lists them.
 

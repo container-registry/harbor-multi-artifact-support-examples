@@ -384,10 +384,9 @@ proving something the moment they are fixed.
 3. Update the hard-coded URL, scheme included, in
    [`apps/todo-ui/.npmrc`](../apps/todo-ui/.npmrc) and
    [`.npmrc.example`](../apps/todo-ui/.npmrc.example),
-   [`apps/todo-ui/package.json`](../apps/todo-ui/package.json) (`publishConfig`),
    [`apps/todo-ui/README.md`](../apps/todo-ui/README.md),
    [`apps/todo-api/.mvn/settings.xml`](../apps/todo-api/.mvn/settings.xml), and
-   `distributionManagement` plus the `harbor.registry` property in
+   the `harbor.registry` property (or `harbor.url` for a non-HTTPS instance) in
    [`apps/todo-api/pom.xml`](../apps/todo-api/pom.xml).
 
 No secret needs to be added to the repository. That is the entire point.
@@ -399,3 +398,4 @@ No secret needs to be added to the repository. That is the entire point.
 - [03-npm.md](03-npm.md)
 - [04-maven.md](04-maven.md)
 - [05-images-wif.md](05-images-wif.md)
+- [07-local-dev.md](07-local-dev.md)

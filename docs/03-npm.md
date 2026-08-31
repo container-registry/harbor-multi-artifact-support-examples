@@ -21,14 +21,10 @@ The `_auth` key below has to name this same URL, trailing slash included, since
 npm attaches credentials by URI prefix. `always-auth=true` makes npm send them on
 tarball downloads too, not only on metadata requests.
 
-`package.json` pins the publish target separately, so a stray global registry
-setting cannot redirect a publish:
-
-```json
-"publishConfig": {
-  "registry": "https://8gcr.container-registry.dev/npm/todomvc-npm/"
-}
-```
+The same `registry=` line is also the publish target — there is deliberately no
+`publishConfig` in `package.json`, so `.npmrc` is the single source of truth for
+reads and writes. Retargeting the whole flow (say, at a local dev instance, see
+[07-local-dev.md](07-local-dev.md)) means editing exactly one file.
 
 ## Authenticate
 
@@ -188,7 +184,8 @@ publish yourself.
 
 **Check whether it applies to you first.** Observed on
 `8gcr.container-registry.dev` (`2.16.0-ca75082c`) on 2026-08-19, and *not* present
-on every build:
+on every build — a cold install through a local dev build did **not** reproduce it
+on 2026-08-31, so re-measure your instance before working around it:
 
 ```bash
 curl -s .../npm/todomvc-npm/lodash        | jq '.versions|length'
