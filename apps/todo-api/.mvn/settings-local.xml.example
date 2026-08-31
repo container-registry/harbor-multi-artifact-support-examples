@@ -15,7 +15,7 @@
        VERSION=0.1.$(date +%Y%m%d%H%M%S)
        mvn -B -s .mvn/settings-local.xml versions:set -DnewVersion=$VERSION -DgenerateBackupPoms=false
        mvn -B -s .mvn/settings-local.xml deploy -DskipTests -Dharbor.url=http://localhost:8080
-       git checkout -- pom.xml
+       git restore pom.xml
 
      See docs/07-local-dev.md for the full walkthrough. -->
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">

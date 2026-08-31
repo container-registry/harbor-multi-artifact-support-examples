@@ -78,7 +78,7 @@ mvn -B -s .mvn/settings-local.xml versions:set \
     -DnewVersion="$VERSION" -DgenerateBackupPoms=false
 mvn -B -s .mvn/settings-local.xml deploy -DskipTests \
     -Dharbor.url=http://localhost:8080       # publish to todomvc-maven
-git checkout -- pom.xml                      # drop the local version bump
+git restore pom.xml                      # drop the local version bump
 ```
 
 Cold pull-back proof, mirror-less on purpose:
