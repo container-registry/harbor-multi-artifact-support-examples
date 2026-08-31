@@ -13,9 +13,6 @@
     "dist",
     "README.md"
   ],
-  "publishConfig": {
-    "registry": "https://8gcr.container-registry.dev/npm/todomvc-npm/"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

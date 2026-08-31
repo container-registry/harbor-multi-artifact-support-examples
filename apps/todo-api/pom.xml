@@ -21,6 +21,9 @@
     <java.version>21</java.version>
     <harbor.registry>8gcr.container-registry.dev</harbor.registry>
     <harbor.maven.project>todomvc-maven</harbor.maven.project>
+    <!-- Full base URL, overridable as one unit so a plain-HTTP local dev
+         instance works: -Dharbor.url=http://localhost:8080 -->
+    <harbor.url>https://${harbor.registry}</harbor.url>
   </properties>
 
   <dependencies>
@@ -50,7 +53,7 @@
     <repository>
       <id>8gcr</id>
       <name>8gcr Maven</name>
-      <url>https://${harbor.registry}/maven/${harbor.maven.project}</url>
+      <url>${harbor.url}/maven/${harbor.maven.project}</url>
     </repository>
   </distributionManagement>
 

@@ -48,6 +48,7 @@ jobs:
       npm_ready: ${{ steps.probe.outputs.npm_ready }}
       maven_ready: ${{ steps.probe.outputs.maven_ready }}
     steps:
+      - uses: actions/checkout@v4
       - id: probe
         run: |
           probe() {  # probe <url> -> "true" only if a package API really answered
@@ -95,6 +96,36 @@ jobs:
           maven_url="$REGISTRY_SCHEME://$REGISTRY/maven/$MAVEN_PROJECT"
           npm_ready="$(probe "$npm_url")";     npm_obs="$(observe "$npm_url")"
           maven_ready="$(probe "$maven_url")"; maven_obs="$(observe "$maven_url")"
+
+          # Routing is necessary but not sufficient: the proxy has been observed
+          # answering as a package API while serving truncated packuments and
+          # 404s for pinned tarballs (issue container-registry/8gcr#360). Since
+          # `docker build` and `npm ci` resolve the lockfile's exact pins, probe
+          # one of those pins for real before routing builds at the proxy.
+          if [ "$npm_ready" = "true" ]; then
+            vue_ver="$(jq -r '.packages["node_modules/vue"].version' apps/todo-ui/package-lock.json)"
+            tarball_url="${npm_url}vue/-/vue-${vue_ver}.tgz"
+            tarball_obs="$(observe "$tarball_url")"
+            case "$tarball_obs" in
+              200*) : ;;
+              *) npm_ready="false"
+                 npm_obs="$npm_obs; pinned tarball vue-$vue_ver.tgz: $tarball_obs" ;;
+            esac
+          fi
+          # Same reasoning for Maven: the routing probe counts a 404 as routed
+          # (a healthy Maven project answers 404 at its root), which also lets a
+          # feature-gate outage - every GAV 404s - through as "ready". Fetch a
+          # real artifact through the pull-through cache before believing it.
+          if [ "$maven_ready" = "true" ]; then
+            gav_url="$maven_url/junit/junit/4.13.2/junit-4.13.2.pom"
+            gav_obs="$(observe "$gav_url")"
+            case "$gav_obs" in
+              200*) : ;;
+              *) maven_ready="false"
+                 maven_obs="$maven_obs; pull-through junit-4.13.2.pom: $gav_obs" ;;
+            esac
+          fi
+
           echo "npm_ready=$npm_ready"   >> "$GITHUB_OUTPUT"
           echo "maven_ready=$maven_ready" >> "$GITHUB_OUTPUT"
 
@@ -109,8 +140,8 @@ jobs:
           # timeout, on a 401, or on a JSON error, and pointing operators at the
           # routing fix for an unrelated outage wastes their time. The table above
           # carries the observed status and content type.
-          [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped."
-          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint did not answer as a package API (see the Observed column in the job summary). Publishing is skipped."
+          [ "$npm_ready" = "true" ] || echo "::warning::npm endpoint is not serving packages (routing gap or degraded proxy cache - see the Observed column in the job summary). Publishing is skipped; builds resolve from npmjs.org."
+          [ "$maven_ready" = "true" ] || echo "::warning::Maven endpoint is not serving artifacts (routing gap or degraded proxy - see the Observed column in the job summary). Publishing is skipped; builds resolve upstream."
 
   # ---------------------------------------------------------------------------
   # Maven: resolve every dependency THROUGH the registry, then publish INTO it.
