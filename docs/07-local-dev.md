@@ -68,7 +68,10 @@ deploy URL is overridable as one property:
 cd apps/todo-api
 cp .mvn/settings-local.xml.example .mvn/settings-local.xml
 export HARBOR_USERNAME=admin HARBOR_PASSWORD=Harbor12345
-VERSION=0.1.100    # releases only: distributionManagement has no snapshot repository
+# Releases only (distributionManagement has no snapshot repository), and
+# published versions are immutable — pick a fresh one per run, the same way
+# the pipeline versions by run number:
+VERSION=0.1.$(date +%Y%m%d%H%M%S)
 
 mvn -B -s .mvn/settings-local.xml verify     # cold build through the proxy
 mvn -B -s .mvn/settings-local.xml versions:set \
@@ -89,11 +92,19 @@ mvn -B -s .mvn/settings-upstream.xml -Dmaven.repo.local="$(mktemp -d)" \
 
 ## 5. Images
 
+Build one of the repo's images first (nothing here produces an image for you;
+CI names them `todomvc/todo-api` and `todomvc/todo-ui`, see
+[05-images-wif.md](05-images-wif.md)). From the repo root:
+
 ```bash
+podman build -t localhost:8080/todomvc/todo-ui:local apps/todo-ui
 podman login -u admin -p Harbor12345 --tls-verify=false localhost:8080
-podman push --tls-verify=false localhost:8080/todomvc/app:1.0.0
-podman pull --tls-verify=false localhost:8080/todomvc/app:1.0.0
+podman push --tls-verify=false localhost:8080/todomvc/todo-ui:local
+podman pull --tls-verify=false localhost:8080/todomvc/todo-ui:local
 ```
+
+`apps/todo-api` pushes the same way, its build just takes longer (a full Maven
+build inside the Dockerfile).
 
 (`docker` works the same; `--tls-verify=false` / an insecure-registry entry is
 needed because dev serves plain HTTP.)

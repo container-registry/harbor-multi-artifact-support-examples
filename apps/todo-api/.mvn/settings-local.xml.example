@@ -9,9 +9,13 @@
        cp .mvn/settings-local.xml.example .mvn/settings-local.xml
        export HARBOR_USERNAME=admin HARBOR_PASSWORD=Harbor12345
        mvn -B -s .mvn/settings-local.xml verify
-       # deploy a RELEASE version (no snapshot repository is configured):
-       mvn -B -s .mvn/settings-local.xml versions:set -DnewVersion=0.1.100 -DgenerateBackupPoms=false
+       # deploy a RELEASE version (no snapshot repository is configured);
+       # published versions are immutable, so mint a fresh one per run and
+       # restore the pom afterwards:
+       VERSION=0.1.$(date +%Y%m%d%H%M%S)
+       mvn -B -s .mvn/settings-local.xml versions:set -DnewVersion=$VERSION -DgenerateBackupPoms=false
        mvn -B -s .mvn/settings-local.xml deploy -DskipTests -Dharbor.url=http://localhost:8080
+       git checkout -- pom.xml
 
      See docs/07-local-dev.md for the full walkthrough. -->
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
