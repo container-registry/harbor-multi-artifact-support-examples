@@ -35,6 +35,7 @@ npmjs.org and the package your pipeline published:
 | [04: Maven](docs/04-maven.md) | The same four steps for Maven |
 | [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
+| [08: Homebrew](docs/08-homebrew.md) | brew metadata + bottles through one proxy project |
 
 ## The five-minute path
 
