@@ -60,12 +60,14 @@ export HARBOR_PASS=...                          # admin password
 
 # for the curl examples below: credentials in a mode-600 config, not on the command line
 export API="$HARBOR_URL/api/v2.0" CURLRC="$(mktemp)"
-chmod 600 "$CURLRC" && printf 'user = "admin:%s"\n' "$HARBOR_PASS" > "$CURLRC"
+_c="admin:$HARBOR_PASS"; _c="${_c//\\/\\\\}"; _c="${_c//\"/\\\"}"
+chmod 600 "$CURLRC" && printf 'user = "%s"\n' "$_c" > "$CURLRC"; unset _c
 ```
 
 `printf` is a shell builtin, so the password never appears in a process
-argument list. A password containing `"` or `\` needs escaping in the curl
-config, as [`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh) does.
+argument list. The two substitutions escape `\` and `"`, which curl treats
+as syntax inside a quoted config value (same as
+[`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh)).
 
 ```
 ==> https://8gcr.container-registry.dev
