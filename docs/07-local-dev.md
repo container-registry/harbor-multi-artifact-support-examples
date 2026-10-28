@@ -118,5 +118,6 @@ needed because dev serves plain HTTP.)
 
 ## Next
 
+- [08: Homebrew](../homebrew/README.md): `brew install` on intranet machines that cannot reach Homebrew
 - [01-concepts.md](01-concepts.md): back to why the projects are split this way
 - [03-npm.md](03-npm.md) / [04-maven.md](04-maven.md): the full flows these local runs mirror
