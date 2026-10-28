@@ -1,6 +1,6 @@
 # Homebrew for machines that cannot reach Homebrew
 
-[← Local dev](07-local-dev.md) · [Concepts →](01-concepts.md)
+[← README](../README.md) · [Concepts](../docs/01-concepts.md)
 
 The situation: developer laptops and build hosts sit in an intranet. They can
 reach the internal registry, but not `formulae.brew.sh`, `ghcr.io` or
@@ -38,6 +38,17 @@ blocked inside the container.
   `homebrew-core` from `github.com`. Clients turn auto-update off (below) and
   get brew upgrades the way your org ships any other tool.
 
+## At a glance
+
+| Covered | Not covered |
+|---|---|
+| Bottles and dependencies from `homebrew/core` | Uploads to the proxy project (the `/homebrew/` route is pull-only) |
+| Formula and cask metadata, so `brew search` works | brew itself: `brew update` needs github.com |
+| Your own tools, as OCI artifacts installed through a git tap ([section 5](#5-publish-your-own-tools)) | Cask installers and third-party taps (vendor download URLs) |
+| Pull-only robots, scoped per project or team | A fully offline registry: metadata is cached 15 minutes, so Harbor needs egress |
+| Quota, retention and audit log like any Harbor project | Per-download audit of internal tools: pushes are logged, downloads are not |
+| Cached bottles keep serving if GHCR is down | macOS clients: same URLs, not yet run |
+
 ## 1. Provision the registry side
 
 One script does it, idempotently:
@@ -46,7 +57,7 @@ One script does it, idempotently:
 export HARBOR_URL=https://8gcr.container-registry.dev
 export HARBOR_PASS=...                          # admin password
 export API="$HARBOR_URL/api/v2.0" PASS="$HARBOR_PASS"   # used by the curl examples below
-./scripts/setup-homebrew.py --out brew.env
+./homebrew/setup-homebrew.py --out brew.env
 ```
 
 ```
@@ -243,7 +254,7 @@ carries Apple extended attributes and `brew install` prints tar warnings.
 
 ### Describe it in a tap
 
-[`homebrew-tap/Formula/acme-hello.rb`](../homebrew-tap/Formula/acme-hello.rb):
+[`tap/Formula/acme-hello.rb`](tap/Formula/acme-hello.rb):
 
 ```ruby
 class AcmeHello < Formula
@@ -349,15 +360,15 @@ digest brew asked for, so brew's own integrity check passes.
 
 ## Demo
 
-[`docs/demos/scripts/04-homebrew.py`](demos/scripts/04-homebrew.py) runs the
+[`docs/demos/scripts/04-homebrew.py`](../docs/demos/scripts/04-homebrew.py) runs the
 blocked-hosts install above end to end:
 
 ```bash
-HARBOR_PASS=... ./scripts/setup-homebrew.py --out brew.env
+HARBOR_PASS=... ./homebrew/setup-homebrew.py --out brew.env
 HARBOR_PASS=... BREW_ENV=brew.env ./docs/demos/scripts/04-homebrew.py
 ```
 
 ## Next
 
-- [01-concepts.md](01-concepts.md): native hosting vs proxy cache
-- [03-npm.md](03-npm.md) / [04-maven.md](04-maven.md): ecosystems where you can also publish
+- [01-concepts.md](../docs/01-concepts.md): native hosting vs proxy cache
+- [03-npm.md](../docs/03-npm.md) / [04-maven.md](../docs/04-maven.md): ecosystems where you can also publish

@@ -13,7 +13,7 @@ proxy. Harbor never returns an existing robot secret, so every run rotates it.
 
 Usage:
   HARBOR_URL=https://8gcr.container-registry.dev HARBOR_PASS=... \\
-    ./scripts/setup-homebrew.py [--out brew.env]
+    ./homebrew/setup-homebrew.py [--out brew.env]
 """
 import argparse
 import base64

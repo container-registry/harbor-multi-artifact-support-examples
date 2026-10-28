@@ -36,7 +36,7 @@ npmjs.org and the package your pipeline published:
 | [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
 | [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
-| [08: Homebrew](docs/08-homebrew.md) | `brew install` on intranet machines that cannot reach Homebrew, plus your own tools |
+| [Homebrew](homebrew/README.md) | Separate use case: `brew install` on intranet machines that cannot reach Homebrew |
 | [Recorded demos](docs/demos/README.md) | Every flow above, recorded end to end against a fresh instance |
 
 ## The five-minute path
@@ -110,62 +110,13 @@ claims to a robot account.
 The username is ignored. The token expires in minutes. Nothing is stored in
 `secrets.*`.
 
-## Homebrew for intranet machines
-
-Laptops and CI runners that cannot reach `formulae.brew.sh`, `ghcr.io` or
-`github.com` still run `brew install`. Harbor is the only host that goes out:
-public packages come through a Homebrew proxy-cache project, your own tools
-from an ordinary OCI project, both with one pull-only robot.
-
-![Only Harbor leaves the network](docs/images/homebrew-architecture.svg)
-
-**Registry side.** `scripts/setup-homebrew.py` creates the Homebrew endpoint
-(`https://formulae.brew.sh/api`), the private proxy project `brew-priv` and a
-pull-only robot, and writes the client settings.
-
-**Client side.** Five settings, rolled out as `/etc/homebrew/brew.env` so
-users change nothing in their shell:
-
-| Setting | Why |
-|---|---|
-| `HOMEBREW_API_DOMAIN=https://<robot>:<secret>@<harbor>/homebrew/brew-priv/api` | Formula metadata. brew sends no credentials on these requests, so they sit in the URL. |
-| `HOMEBREW_ARTIFACT_DOMAIN=https://<harbor>/homebrew/brew-priv` | Manifests and bottles. |
-| `HOMEBREW_ARTIFACT_DOMAIN_NO_FALLBACK=1` | A proxy problem fails loudly instead of quietly going to ghcr.io. |
-| `HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN=<base64 robot:secret>` | Bottle auth. Basic only, a Bearer token gets `401`. |
-| `HOMEBREW_NO_AUTO_UPDATE=1` | `brew update` fetches brew itself from github.com, which is blocked. |
-
-**Your own tools.** The proxy accepts no uploads. CI pushes the tool to a
-private OCI project, a formula in your git tap points at the Harbor blob, and
-clients install it with the same `brew.env`
-([example tap](homebrew-tap/)):
-
-![Internal tools: publish, describe, install](docs/images/homebrew-internal-tools.svg)
-
-**Verified** on 2026-10-27 and 2026-10-28 with Homebrew 4.6.20 in
-`homebrew/ubuntu24.04`, with all seven Homebrew and GitHub hosts blocked inside
-the container: `brew install jq` and `brew install acme/tools/acme-hello`
-both downloaded only from `8gcr.container-registry.dev`, and every proxied
-bottle shows up as a `HOMEBREW` artifact with its pulls in the audit log under
-the robot's name.
-
-| Covered | Not covered |
-|---|---|
-| Bottles and dependencies from `homebrew/core` | Uploads to the proxy project (the `/homebrew/` route is pull-only) |
-| Formula and cask metadata, so `brew search` works | brew itself: `brew update` needs github.com |
-| Your own tools, as OCI artifacts installed through a git tap | Cask installers and third-party taps (vendor download URLs) |
-| Pull-only robots, scoped per project or team | A fully offline registry: metadata is cached 15 minutes, so Harbor needs egress |
-| Quota, retention and audit log like any Harbor project | Per-download audit of internal tools: pushes are logged, downloads are not |
-| Cached bottles keep serving if GHCR is down | macOS clients: same URLs, not yet run |
-
-Details, every command and its output: [08-homebrew.md](docs/08-homebrew.md).
-
 ## Repository layout
 
 ```
 apps/todo-api/      Spring Boot + H2 backend. The Maven artifact.
 apps/todo-ui/       Vue 3 TodoMVC frontend. The npm artifact.
 .github/workflows/  The pipeline that publishes all three artifact kinds.
-homebrew-tap/       Example Homebrew tap for an internal tool served by Harbor.
+homebrew/           Homebrew use case: guide, setup script, example tap, diagrams.
 scripts/            Idempotent registry provisioning.
 docs/               The guide.
 ```

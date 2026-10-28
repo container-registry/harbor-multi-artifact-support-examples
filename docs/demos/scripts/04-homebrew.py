@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Demo: a machine that cannot reach Homebrew installs jq through Harbor.
 
-Needs the client env file written by scripts/setup-homebrew.py (BREW_ENV,
+Needs the client env file written by homebrew/setup-homebrew.py (BREW_ENV,
 default brew.env) and HARBOR_PASS for the Harbor-side view.
 """
 import os
@@ -33,7 +33,7 @@ def main():
     env.setdefault("IMG", "homebrew/ubuntu24.04:latest")
     env["BLOCKED"] = " ".join(f"--add-host {h}:127.0.0.1" for h in HOMEBREW_HOSTS)
     if not os.path.exists(env["BREW_ENV"]) or not env.get("HARBOR_PASS"):
-        sys.exit("run scripts/setup-homebrew.py first and set HARBOR_PASS")
+        sys.exit("run homebrew/setup-homebrew.py first and set HARBOR_PASS")
 
     say("An intranet machine: Homebrew's hosts resolve to nowhere, only Harbor is reachable.")
     run('for h in $BLOCKED; do [ "$h" = --add-host ] || echo "blocked: ${h%:*}"; done')

@@ -54,7 +54,7 @@ Harbor is reachable. The real `brew install jq` pulls formula metadata,
 manifests and bottles through the `brew-priv` proxy project as a pull-only
 robot, then the Harbor side shows the cached repositories and the robot's
 pulls in the audit log. Recorded against `https://8gcr.container-registry.dev`
-on 2026-10-27, after `scripts/setup-homebrew.py`. See [08-homebrew.md](../08-homebrew.md).
+on 2026-10-27, after `homebrew/setup-homebrew.py`. See [homebrew/README.md](../../homebrew/README.md).
 [mp4](04-homebrew.mp4) · [cast](04-homebrew.cast) · [script](scripts/04-homebrew.py)
 
 ![Homebrew](04-homebrew.gif)
@@ -68,7 +68,7 @@ HARBOR_SRC=~/code/harbor ./scripts/00-fresh-setup.sh
 ./scripts/01-npm.sh
 ./scripts/02-maven.sh
 ./scripts/03-images.sh
-HARBOR_PASS=... ../../scripts/setup-homebrew.py --out brew.env
+HARBOR_PASS=... ../../homebrew/setup-homebrew.py --out brew.env
 HARBOR_PASS=... BREW_ENV=brew.env ./scripts/04-homebrew.py
 ```
 

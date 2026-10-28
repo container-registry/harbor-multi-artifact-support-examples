@@ -2,7 +2,7 @@
 
 `Formula/acme-hello.rb` installs a tool your organisation builds itself. The
 formula lives in git; the binary lives in the private Harbor OCI project
-`internal-tools`. See [08-homebrew.md](../docs/08-homebrew.md#5-publish-your-own-tools).
+`internal-tools`. See [the Homebrew guide](../README.md#5-publish-your-own-tools).
 
 `brew tap` needs a git repository root, so copy this directory into its own
 repository on your git server (by convention named `homebrew-<tap>`):
