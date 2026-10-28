@@ -1,6 +1,6 @@
 # Homebrew for machines that cannot reach Homebrew
 
-[← README](../README.md) · [Concepts](../docs/01-concepts.md)
+[← Local dev](../docs/07-local-dev.md) · [Concepts →](../docs/01-concepts.md)
 
 The situation: developer laptops and build hosts sit in an intranet. They can
 reach the internal registry, but not `formulae.brew.sh`, `ghcr.io` or

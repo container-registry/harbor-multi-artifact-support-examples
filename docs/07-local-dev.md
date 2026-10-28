@@ -1,6 +1,6 @@
 # 07: Running the examples against a local Harbor dev instance
 
-[← The pipeline](06-pipeline.md) · [Concepts →](01-concepts.md)
+[← The pipeline](06-pipeline.md) · [Homebrew →](../homebrew/README.md)
 
 Everything in this repo also works against a Harbor Next dev environment
 (`task dev:up` in the harbor repo) on plain HTTP at `localhost:8080` —
