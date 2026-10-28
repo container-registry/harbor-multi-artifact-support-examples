@@ -21,3 +21,9 @@ settings-local.xml
 *.swp
 .idea/
 .vscode/
+
+# Homebrew client settings written by scripts/setup-homebrew.py (robot secret)
+brew.env
+
+# Python bytecode from running the scripts
+__pycache__/

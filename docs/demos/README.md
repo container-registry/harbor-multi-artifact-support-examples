@@ -49,11 +49,13 @@ copy, pull it back. See [05-images-wif.md](../05-images-wif.md).
 
 ## 04 — Homebrew
 
-Create the Homebrew endpoint and proxy project, fetch formula metadata,
-resolve a bottle digest from the version manifest, cold pull (round-trips to
-GHCR) vs warm pull (served from Harbor, ~10× faster, byte-identical), and
-where it lands: repository, pull count, audit log.
-[mp4](04-homebrew.mp4) · [cast](04-homebrew.cast) · [script](scripts/04-homebrew.sh)
+An intranet client: every Homebrew host is blocked inside the container, only
+Harbor is reachable. The real `brew install jq` pulls formula metadata,
+manifests and bottles through the `brew-priv` proxy project as a pull-only
+robot, then the Harbor side shows the cached repositories and the robot's
+pulls in the audit log. Recorded against `https://8gcr.container-registry.dev`
+on 2026-10-27, after `scripts/setup-homebrew.py`. See [08-homebrew.md](../08-homebrew.md).
+[mp4](04-homebrew.mp4) · [cast](04-homebrew.cast) · [script](scripts/04-homebrew.py)
 
 ![Homebrew](04-homebrew.gif)
 
@@ -66,7 +68,8 @@ HARBOR_SRC=~/code/harbor ./scripts/00-fresh-setup.sh
 ./scripts/01-npm.sh
 ./scripts/02-maven.sh
 ./scripts/03-images.sh
-./scripts/04-homebrew.sh
+HARBOR_PASS=... ../../scripts/setup-homebrew.py --out brew.env
+HARBOR_PASS=... BREW_ENV=brew.env ./scripts/04-homebrew.py
 ```
 
 Recorded 2026-08-31 with `asciinema rec --headless --window-size 100x30 -i 2`,

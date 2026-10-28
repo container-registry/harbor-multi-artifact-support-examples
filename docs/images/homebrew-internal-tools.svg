@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 230" role="img" aria-label="Internal tools: 1 CI pushes the tool tarball to the Harbor project internal-tools; 2 a formula in an internal git tap points at the Harbor blob by digest; 3 intranet clients run brew tap and brew install and download from Harbor.">
+  <style>
+    text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #22262d; }
+    .n { font-size: 15px; font-weight: 700; letter-spacing: .12em; fill: #d03808; }
+    .h { font-size: 23px; font-weight: 600; }
+    .s { font-size: 17px; fill: #5f6772; }
+    .m { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; }
+    .w { font-size: 14px; font-weight: 600; letter-spacing: .12em; fill: #5f6772; }
+    .box { fill: #ffffff; stroke: #cfd4db; stroke-width: 2; }
+    .hb { fill: #fcebe3; stroke: #d03808; stroke-width: 2.5; }
+    .code { fill: #f1f3f6; }
+  </style>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#3b3f46"/></marker></defs>
+  <rect width="1200" height="230" fill="#ffffff"/>
+
+  <text class="w" x="30" y="30">HARBOR</text>
+  <rect class="hb" x="20" y="44" width="350" height="166" rx="3"/>
+  <text class="n" x="44" y="78">1 PUBLISH</text>
+  <text class="h" x="44" y="110">CI pushes the tool</text>
+  <text class="s" x="44" y="138">to the private OCI project, as a push robot</text>
+  <rect class="code" x="44" y="156" width="304" height="34" rx="2"/>
+  <text class="m" x="56" y="178">internal-tools/acme-hello:1.0.0</text>
+
+  <path d="M378 127 L418 127" stroke="#3b3f46" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <text class="w" x="435" y="30">INTERNAL GIT SERVER</text>
+  <rect class="box" x="425" y="44" width="350" height="166" rx="3"/>
+  <text class="n" x="449" y="78">2 DESCRIBE</text>
+  <text class="h" x="449" y="110">Formula in a git tap</text>
+  <text class="s" x="449" y="138">version, Harbor blob URL, sha256</text>
+  <rect class="code" x="449" y="156" width="304" height="34" rx="2"/>
+  <text class="m" x="461" y="178">acme/tools/acme-hello.rb</text>
+
+  <path d="M783 127 L823 127" stroke="#3b3f46" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <text class="w" x="840" y="30">INTRANET CLIENT</text>
+  <rect class="box" x="830" y="44" width="350" height="166" rx="3"/>
+  <text class="n" x="854" y="78">3 INSTALL</text>
+  <text class="h" x="854" y="110">brew tap, brew install</text>
+  <text class="s" x="854" y="138">same brew.env and pull robot as the proxy</text>
+  <rect class="code" x="854" y="156" width="304" height="34" rx="2"/>
+  <text class="m" x="866" y="178">brew install acme/tools/acme-hello</text>
+</svg>
