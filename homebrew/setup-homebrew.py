@@ -20,6 +20,7 @@ import base64
 import json
 import os
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -152,13 +153,23 @@ def main():
     print(f"==> {url}")
     h.call("GET", "/users/current")
     project_id = ensure_project(h, ensure_endpoint(h))
-    name, secret = ensure_robot(h, project_id)
-    fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    # The mode above applies only to a new file; an existing one keeps its own.
-    os.fchmod(fd, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(client_env(url, name, secret))
-    ok(f"client settings written to {args.out} (contains the robot secret)")
+    out = os.path.abspath(args.out)
+    # Stage the file before rotating: an unwritable --out must not leave clients with a revoked secret.
+    try:
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(out), prefix=".brew.env.")
+    except OSError as e:
+        die(f"cannot write next to {out}: {e}")
+    try:
+        with os.fdopen(fd, "w") as f:
+            name, secret = ensure_robot(h, project_id)
+            f.write(client_env(url, name, secret))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, out)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+    ok(f"client settings written to {args.out}, mode 600 (contains the robot secret)")
     check_metadata(url, name, secret)
 
 

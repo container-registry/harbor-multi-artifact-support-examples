@@ -125,9 +125,23 @@ Why each one is there:
 - **`HOMEBREW_NO_AUTO_UPDATE=1`** stops brew from trying to `git fetch` itself
   from `github.com` before every install.
 
-Distribute it system-wide by placing the file at `/etc/homebrew/brew.env`.
-brew reads that file itself, so users need no shell profile changes. Verified
-on Linux with no `HOMEBREW_*` variable set in the environment:
+brew reads `brew.env` files itself, so users need no shell profile changes.
+brew runs as the user, not as root, so the user must be able to read the file.
+An unreadable file is skipped silently, and brew then goes to
+`formulae.brew.sh` directly. Two ways to roll it out:
+
+```bash
+# system-wide: readable by a group that contains the brew users
+sudo install -d /etc/homebrew
+sudo install -m 0640 -o root -g brewusers brew.env /etc/homebrew/brew.env
+
+# per user
+install -d ~/.homebrew && install -m 0600 brew.env ~/.homebrew/brew.env
+```
+
+A root-owned `/etc/homebrew/brew.env` with mode 0600 does not work.
+
+Verified on Linux with no `HOMEBREW_*` variable set in the environment:
 
 ```console
 $ docker run --rm ... -v ./brew.env:/etc/homebrew/brew.env:ro homebrew/ubuntu24.04 \
@@ -178,7 +192,7 @@ Each installed bottle is a Harbor artifact of type `HOMEBREW`, tagged with the
 formula version, one layer per platform pulled:
 
 ```console
-$ curl -su admin:$PASS "$API/projects/brew-priv/repositories" \
+$ curl -su "admin:$PASS" "$API/projects/brew-priv/repositories" \
     | jq -r '.[] | [.name, .artifact_count, .pull_count] | @tsv'
 brew-priv/homebrew/core/oniguruma   1   8
 brew-priv/homebrew/core/jq          2   20
@@ -187,7 +201,7 @@ brew-priv/homebrew/core/jq          2   20
 Every download is in the audit log under the robot that made it:
 
 ```console
-$ curl -su admin:$PASS "$API/auditlog-exts?page_size=4&q=resource%3D~brew-priv" \
+$ curl -su "admin:$PASS" "$API/auditlog-exts?page_size=4&q=resource%3D~brew-priv" \
     | jq -r '.[] | [.op_time, .username, .operation, .resource] | @tsv'
 2026-10-27T13:46:05Z  bot_brew-priv+brew-puller  pull  brew-priv/homebrew/core/jq:1.8.2-1
 2026-10-27T13:46:04Z  bot_brew-priv+brew-puller  pull  brew-priv/homebrew/core/oniguruma:6.9.10
@@ -265,6 +279,10 @@ class AcmeHello < Formula
   version "1.0.0"
   sha256 "230b49fcbb8f7ffb703c315e84665b4a0a4403201e3a8ca906fbf6ef01889845"
 
+  # The published artifact is a single linux/amd64 binary.
+  depends_on arch: :x86_64
+  depends_on :linux
+
   def install
     bin.install "acme-hello"
   end
@@ -276,15 +294,20 @@ end
 - `using: CurlGitHubPackagesDownloadStrategy` is what makes brew send
   `HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN` on the download. With the
   default strategy the private project answers `401`.
+- `depends_on` limits the formula to what was published, a linux/amd64
+  binary. Other clients get a clear refusal instead of a binary that cannot
+  run. For several platforms, push one archive per platform and select it
+  with `on_macos`/`on_linux` and `on_arm`/`on_intel` blocks.
 - `HOMEBREW_ARTIFACT_DOMAIN` does not interfere: brew rewrites only `ghcr.io`
   URLs to it, so this Harbor URL is used as written.
 
 ### Install
 
-Same blocked-hosts client as above, same `brew.env`:
+Same blocked-hosts client as above, same `brew.env`. The tap is the git
+repository you created from [`tap/`](tap/):
 
 ```console
-$ brew tap acme/tools /tap
+$ brew tap acme/tools https://git.internal/acme/homebrew-tools
 $ brew install acme/tools/acme-hello
 ==> Downloading https://8gcr.container-registry.dev/v2/internal-tools/acme-hello/blobs/sha256:230b49fc…
 ==> Installing acme-hello from acme/tools
