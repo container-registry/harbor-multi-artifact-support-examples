@@ -102,7 +102,7 @@ behind the same credential.
 Nothing in the pipeline stores a registry password. GitHub Actions mints an OIDC
 JWT, and that JWT is used directly as the HTTP Basic password against all three
 endpoints. There is no token-exchange step. See
-[05-images-wif.md](05-images-wif.md) for how Harbor turns that JWT into a robot
+[05: Images and keyless auth](../images/README.md) for how Harbor turns that JWT into a robot
 account, and [06-pipeline.md](06-pipeline.md) for where it is used.
 
 | Client | How the credential is supplied |
@@ -117,8 +117,8 @@ This repository uses `jwt` by convention.
 ## Next
 
 - [02-harbor-setup.md](02-harbor-setup.md): provisioning the endpoints, projects, IdP and robot
-- [03-npm.md](03-npm.md): npm, from `npm ci` through `npm publish` and back
-- [04-maven.md](04-maven.md): Maven, the same round trip
-- [05-images-wif.md](05-images-wif.md): keyless image push and pull
+- [03: npm](../npm/README.md): npm, from `npm ci` through `npm publish` and back
+- [04: Maven](../maven/README.md): Maven, the same round trip
+- [05: Images and keyless auth](../images/README.md): keyless image push and pull
 - [06-pipeline.md](06-pipeline.md): the whole thing in CI
 - [07-local-dev.md](07-local-dev.md): the same flows against a local `task dev:up` Harbor

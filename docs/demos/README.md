@@ -4,7 +4,7 @@ Every flow in this repository, recorded end to end with
 [asciinema](https://asciinema.org/). Demos 00 to 03 ran against a **freshly
 wiped** local Harbor Next dev instance (`localhost:8080`, state volumes deleted first — nothing
 was cached, nothing pre-created except what each recording shows). The
-scripts that produced them are in [`scripts/`](scripts/) and print every
+scripts that produced them are in [`scripts/`](scripts) and print every
 command before running it, so each recording doubles as a copy-pasteable
 walkthrough. Demo 04 (Homebrew) is the exception: it ran against the hosted
 `https://8gcr.container-registry.dev`, see its section.
@@ -25,7 +25,7 @@ provision endpoints and projects with `scripts/setup-8gcr.sh`.
 
 Upstream-complete packument on a cold cache, exact-pin install of a
 never-cached version, `npm ci` + build through the proxy, publish our own
-package, cold pull-back. See [03-npm.md](../03-npm.md).
+package, cold pull-back. See [03: npm](../../npm/README.md).
 [mp4](01-npm.mp4) · [cast](01-npm.cast) · [script](scripts/01-npm.sh)
 
 ![npm](01-npm.gif)
@@ -35,7 +35,7 @@ package, cold pull-back. See [03-npm.md](../03-npm.md).
 Cold GAV pull-through with checksums, then the real test: `mvn verify` with
 an **empty local repository** — every dependency and plugin resolves through
 Harbor — followed by a release deploy and a mirror-less cold pull-back.
-See [04-maven.md](../04-maven.md).
+See [04: Maven](../../maven/README.md).
 [mp4](02-maven.mp4) · [cast](02-maven.cast) · [script](scripts/02-maven.sh)
 
 ![Maven](02-maven.gif)
@@ -43,7 +43,7 @@ See [04-maven.md](../04-maven.md).
 ## 03 — Images
 
 Build the todo-ui image, push it to the `todomvc` project, forget the local
-copy, pull it back. See [05-images-wif.md](../05-images-wif.md).
+copy, pull it back. See [05: Images and keyless auth](../../images/README.md).
 [mp4](03-images.mp4) · [cast](03-images.cast) · [script](scripts/03-images.sh)
 
 ![Images](03-images.gif)

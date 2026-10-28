@@ -192,7 +192,7 @@ jobs:
         run: |
           # Same reasoning as the npm job: a reachable endpoint is not proof it can
           # serve a full tree. The Maven proxy stops fetching cold coordinates and
-          # reports it as a plain 404 (see docs/04-maven.md), so a failure here
+          # reports it as a plain 404 (see maven/README.md), so a failure here
           # falls back rather than blocking the build.
           # The settings file that actually worked is recorded, so the publish
           # step below resolves its own plugins the same way. Publishing through a
@@ -204,7 +204,7 @@ jobs:
               echo "settings=.mvn/settings.xml" >> "$GITHUB_ENV"
               exit 0
             fi
-            echo "::warning::Build through the registry failed; retrying against Maven Central. See docs/04-maven.md"
+            echo "::warning::Build through the registry failed; retrying against Maven Central. See maven/README.md"
           else
             echo "::notice::Building against Maven Central - the registry's Maven endpoint is unreachable."
           fi
@@ -282,13 +282,13 @@ jobs:
           # Preflight only proves the endpoint answers, not that it can serve a
           # whole dependency tree. The npm proxy cache currently returns packuments
           # that omit versions it holds, which surfaces as ETARGET partway through
-          # an install (see docs/03-npm.md). Falling back keeps the build honest
+          # an install (see npm/README.md). Falling back keeps the build honest
           # about where the packages came from instead of failing opaquely.
           if [ "${{ needs.preflight.outputs.npm_ready }}" = "true" ]; then
             if npm ci; then
               exit 0
             fi
-            echo "::warning::Install through the registry failed; retrying against npmjs.org. See docs/03-npm.md"
+            echo "::warning::Install through the registry failed; retrying against npmjs.org. See npm/README.md"
             rm -rf node_modules
           else
             echo "::notice::Installing from npmjs.org - the registry's npm endpoint is unreachable."

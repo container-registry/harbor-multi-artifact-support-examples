@@ -94,7 +94,7 @@ mvn -B -s .mvn/settings-upstream.xml -Dmaven.repo.local="$(mktemp -d)" \
 
 Build one of the repo's images first (nothing here produces an image for you;
 CI names them `todomvc/todo-api` and `todomvc/todo-ui`, see
-[05-images-wif.md](05-images-wif.md)). From the repo root:
+[05: Images and keyless auth](../images/README.md)). From the repo root:
 
 ```bash
 podman build -t localhost:8080/todomvc/todo-ui:local apps/todo-ui
@@ -120,4 +120,4 @@ needed because dev serves plain HTTP.)
 
 - [08: Homebrew](../homebrew/README.md): `brew install` on intranet machines that cannot reach Homebrew
 - [01-concepts.md](01-concepts.md): back to why the projects are split this way
-- [03-npm.md](03-npm.md) / [04-maven.md](04-maven.md): the full flows these local runs mirror
+- [03: npm](../npm/README.md) / [04: Maven](../maven/README.md): the full flows these local runs mirror
