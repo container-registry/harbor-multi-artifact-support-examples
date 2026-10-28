@@ -377,7 +377,7 @@ proving something the moment they are fixed.
 
 1. Change `REGISTRY`, and `REGISTRY_SCHEME` if your instance is not on HTTPS, plus
    the three project names in the `env:` block.
-2. Run [`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh) against your instance
+2. Run [`scripts/setup-8gcr.py`](../scripts/setup-8gcr.py) against your instance
    with `GITHUB_REPO` set to your fork, so the claim rule matches. Note the audience
    it prints: it is the host from `HARBOR_URL` with the port, and the workflow has to
    request that same string.

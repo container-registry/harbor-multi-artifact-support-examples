@@ -3,13 +3,13 @@
 [← Concepts](01-concepts.md) · [npm →](../npm/README.md)
 
 Everything in this page is done through the Harbor API with `curl`. All of it is
-also scripted, idempotently, in [`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh):
+also scripted, idempotently, in [`scripts/setup-8gcr.py`](../scripts/setup-8gcr.py):
 
 ```bash
 HARBOR_URL=https://8gcr.container-registry.dev \
 HARBOR_USER=admin HARBOR_PASS=... \
 GITHUB_REPO=container-registry/harbor-multi-artifact-support-examples \
-./scripts/setup-8gcr.sh
+./scripts/setup-8gcr.py
 ```
 
 Read the script rather than trusting this page if the two ever disagree; the
@@ -107,17 +107,18 @@ Repository names carry the format as a path segment:
 That is how one project holds several package formats without their names
 colliding.
 
-## 3. Federated identity provider
+## 3. Trusted issuer
 
 This is what makes the pipeline secretless. Harbor is told to trust GitHub's OIDC
-issuer.
+issuer for tokens minted for one audience: the registry hostname.
 
 ```bash
-curl -su "admin:$PASS" -H 'Content-Type: application/json' -X POST "$API/federated-idps" \
+curl -su "admin:$PASS" -H 'Content-Type: application/json' -X POST "$API/trusted-issuers" \
   -d '{"name":"github-actions",
        "description":"GitHub Actions OIDC - keyless pushes from CI",
        "openid_config_url":"https://token.actions.githubusercontent.com/.well-known/openid-configuration",
-       "offline_validation":false}'
+       "offline_validation":false,
+       "audience":"8gcr.container-registry.dev"}'
 ```
 
 `offline_validation:false` means Harbor fetches the discovery document itself and
@@ -125,28 +126,43 @@ keeps the JWKS current. GitHub rotates its signing keys, and with online
 validation that rotation needs no action here. Offline validation would require
 you to paste and maintain the keys.
 
-Both `openid_config_url` and `issuer` must be HTTPS; anything else is rejected with
-`openid_config_url must use HTTPS protocol`. An issuer you run yourself in a lab
-therefore has to go in as `offline_validation:true` with the keys supplied directly.
+`audience` is required and immutable. A trusted issuer is identified by issuer
+plus audience, and a token is routed to the trusted issuer whose `iss` and `aud`
+it carries, so a token minted for any other audience matches nothing. `aud` and
+`iss` are therefore properties of the trusted issuer, not claim rules; the API
+rejects them as claim rules.
 
-The IdP is visible under **Administration → Identity Providers**.
+Using the registry hostname as the audience is deliberate. GitHub will mint a
+token with whatever `aud` the workflow asks for, so a token minted for some other
+service cannot be replayed against this registry, and vice versa. The script takes
+it from `HARBOR_URL`'s host, port included, so an instance on a non-default port
+gets an audience like `registry.example.com:8180` and the workflow has to ask for
+exactly that string. The pipeline requests exactly this audience; see
+[`.github/actions/8gcr-token/action.yml`](../.github/actions/8gcr-token/action.yml).
+
+Both `openid_config_url` and `issuer` must be HTTPS. An issuer you run yourself
+in a lab therefore has to go in as `offline_validation:true` with `issuer` and
+`jwks_keys` supplied directly.
+
+The trusted issuer is visible under **Administration → Trusted Issuers**.
 
 ## 4. A robot account with no secret
 
 An ordinary Harbor robot has a generated password that you have to store
-somewhere. This one does not. It is bound to the IdP by `federatedidp_id`, and it
-can only be assumed by presenting a valid token from that IdP.
+somewhere. This one does not. It is linked to the trusted issuer by
+`trusted_issuer_id`, Harbor returns no secret for it, and it can only be assumed
+by presenting a valid token from that issuer.
 
 ```bash
-IDP_ID=1   # from GET /api/v2.0/federated-idps
+ISSUER_ID=9   # from GET /api/v2.0/trusted-issuers
 
-curl -su "admin:$PASS" -H 'Content-Type: application/json' -X POST "$API/robots" -d @- <<'JSON'
+curl -su "admin:$PASS" -H 'Content-Type: application/json' -X POST "$API/robots" -d @- <<JSON
 {
   "name": "todomvc-ci",
-  "description": "Keyless CI robot (GitHub Actions WIF)",
+  "description": "Keyless CI robot (GitHub Actions)",
   "level": "system",
   "duration": -1,
-  "federatedidp_id": 1,
+  "trusted_issuer_id": $ISSUER_ID,
   "permissions": [
     {"kind":"project","namespace":"todomvc",
      "access":[{"resource":"repository","action":"push"},
@@ -172,67 +188,37 @@ JSON
 secret to leak: the robot is unusable without a fresh, correctly-claimed token.
 
 A permission entry naming a project that does not exist is rejected, so create the
-projects first. The setup script checks which of the three projects exist and
-grants on that set, then **reconciles the robot with a `PUT` on every run**.
+projects first. The setup script **reconciles the robot's permissions with a
+`PUT` on every run**, so a robot created before a project existed is widened
+later instead of failing CI with a 401.
 
-The reconcile matters more than it looks. If the npm and Maven projects could not
-be created on the first run, the robot is created with `todomvc` alone. On a later
-run, once those projects exist, `POST /robots` returns 409 for the name that is
-already taken, so a script that stopped there would leave the robot permanently
-short of push on the package projects, and the pipeline would fail with a 401
-against projects that visibly exist.
+Two naming quirks, both handled by the script:
 
-One quirk when reconciling: the update has to carry the robot's **stored** name.
-Harbor prefixes system robots with the configured `robot_name_prefix`, `robot$` by
-default, so sending back the name you asked for at creation time is rejected with
-`cannot update the level or name of robot`.
+- Harbor stores a system robot under the configured `robot_name_prefix`
+  (`bot_` on 8gcr, `robot$` by default) and returns the prefixed name, but the
+  `GET /robots?q=name=...` query matches the **unprefixed** name.
+- An update must carry the robot's **stored**, prefixed name, or it is rejected
+  with `cannot update the level or name of robot`.
 
-That prefix is also what you have to look the robot up by, and guessing it wrong
-finds nothing. Read it from `GET /api/v2.0/configurations`, as the script does,
-rather than assuming the default.
+## 5. Claim rule
 
-## 5. Claim rules
-
-Claim rules are what actually connect a token to a robot. Without them the IdP is
+A claim rule is what connects a token to a robot. Without one the issuer is
 trusted but no token maps to anything.
 
 ```bash
-IDP_ID=1
-ROBOT_ID=3     # from GET /api/v2.0/robots
+ROBOT_ID=31   # from GET /api/v2.0/robots
 
-# Provider-wide rule: robot_id 0 means "applies to every token from this IdP".
-# Any token whose aud is not the registry hostname is rejected outright.
 curl -su "admin:$PASS" -H 'Content-Type: application/json' \
-  -X POST "$API/federated-idps/$IDP_ID/claims" \
-  -d "{\"rules\":[{\"identity_provider_id\":$IDP_ID,\"robot_id\":0,
-        \"claim_path\":\"aud\",\"value\":\"8gcr.container-registry.dev\"}]}"
-
-# Robot-bound rule: this is the one that selects the robot.
-curl -su "admin:$PASS" -H 'Content-Type: application/json' \
-  -X POST "$API/federated-idps/$IDP_ID/claims" \
-  -d "{\"rules\":[{\"identity_provider_id\":$IDP_ID,\"robot_id\":$ROBOT_ID,
-        \"claim_path\":\"repository\",
+  -X POST "$API/trusted-issuers/$ISSUER_ID/claims" \
+  -d "{\"rules\":[{\"robot_id\":$ROBOT_ID,\"claim_path\":\"repository\",
         \"value\":\"container-registry/harbor-multi-artifact-support-examples\"}]}"
 ```
 
-The two rules do different jobs:
-
-- `robot_id: 0` is a **gate**. It applies to every token from this provider and
-  must pass before anything else is considered.
-- `robot_id: <id>` is a **selector**. A token that satisfies it becomes that
-  robot and gets that robot's permissions.
-
-Using the registry hostname as the audience is deliberate. GitHub will mint a
-token with whatever `aud` the workflow asks for, so a token minted for some other
-service cannot be replayed against this registry, and vice versa. The script takes
-it from `HARBOR_URL`'s host, port included, so an instance on a non-default port
-gets an audience like `registry.example.com:8180` and the workflow has to ask for
-exactly that string. The pipeline requests exactly this audience; see
-[`.github/actions/8gcr-token/action.yml`](../.github/actions/8gcr-token/action.yml).
-
 The `repository` claim is GitHub's `owner/repo`. Tokens from any other repository
-satisfy the provider gate but match no robot, so they authenticate as nobody. To
-narrow further, add a rule on `ref` (`refs/heads/main`) or `environment`.
+pass the issuer and audience check but match no robot, so they authenticate as
+nobody. To narrow further, add a rule on `ref` (`refs/heads/main`) or
+`environment`; every rule bound to the robot must match. Two robots on the same
+trusted issuer cannot have identical claim sets.
 
 ## 6. Check it
 

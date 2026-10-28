@@ -67,7 +67,7 @@ chmod 600 "$CURLRC" && printf 'user = "%s"\n' "$_c" > "$CURLRC" && unset _c
 `printf` is a shell builtin, so the password never appears in a process
 argument list. The two substitutions escape `\` and `"`, which curl treats
 as syntax inside a quoted config value (same as
-[`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh)).
+[`docs/demos/scripts/04-homebrew.py`](../docs/demos/scripts/04-homebrew.py)).
 
 ```
 ==> https://8gcr.container-registry.dev

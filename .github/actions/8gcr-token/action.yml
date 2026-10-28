@@ -3,12 +3,12 @@ description: >
   Obtains a short-lived GitHub OIDC token and returns it as the password to use
   against 8gcr. There is no token exchange step and no stored registry secret:
   Harbor's robotjwt authenticator recognises a JWT in the HTTP Basic password
-  field, validates it against the identity provider's JWKS, and matches its
+  field, validates it against the trusted issuer's JWKS, and matches its
   claims to a robot account.
 
 inputs:
   audience:
-    description: OIDC audience to request. Must equal the `aud` claim rule configured on the IdP.
+    description: OIDC audience to request. Must equal the `audience` of the trusted issuer.
     required: true
 
 outputs:
