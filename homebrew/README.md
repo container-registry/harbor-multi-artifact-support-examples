@@ -61,7 +61,7 @@ export HARBOR_PASS=...                          # admin password
 # for the curl examples below: credentials in a mode-600 config, not on the command line
 export API="$HARBOR_URL/api/v2.0" CURLRC="$(mktemp)"
 _c="admin:$HARBOR_PASS"; _c="${_c//\\/\\\\}"; _c="${_c//\"/\\\"}"
-chmod 600 "$CURLRC" && printf 'user = "%s"\n' "$_c" > "$CURLRC"; unset _c
+chmod 600 "$CURLRC" && printf 'user = "%s"\n' "$_c" > "$CURLRC" && unset _c
 ```
 
 `printf` is a shell builtin, so the password never appears in a process
