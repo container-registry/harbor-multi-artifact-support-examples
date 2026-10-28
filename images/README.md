@@ -1,6 +1,6 @@
 # Container images, pushed keylessly
 
-[← Maven](04-maven.md) · [Pipeline →](06-pipeline.md)
+[← Maven](../maven/README.md) · [Pipeline →](../docs/06-pipeline.md)
 
 Container images go into the plain `todomvc` project over the ordinary OCI API.
 Nothing about the registry side is unusual. What is unusual is that the pipeline
@@ -58,7 +58,7 @@ Steps 9 and 10 are the whole security model. A token that fails the provider rul
 is rejected outright. A token that passes it but matches no robot rule
 authenticates as nobody. Only a token carrying both the right audience and the
 right `repository` claim becomes `robot_todomvc-ci`. The rules themselves are
-created in [02-harbor-setup.md](02-harbor-setup.md).
+created in [02-harbor-setup.md](../docs/02-harbor-setup.md).
 
 ## Why the audience is the registry hostname
 
@@ -113,7 +113,7 @@ docker push 8gcr.container-registry.dev/todomvc/todo-api:$(git rev-parse HEAD)
 
 In CI this is `docker/build-push-action`, tagging each image twice, with the
 commit sha and with `latest`. The commit sha tag is the one worth pulling by; see
-[06-pipeline.md](06-pipeline.md).
+[06-pipeline.md](../docs/06-pipeline.md).
 
 The robot needs `repository:push`, `repository:pull`, `artifact:read` and
 `tag:create` on `todomvc`. Missing `tag:create` produces a push that uploads all
@@ -142,4 +142,4 @@ detail is `core.getIDToken()` and the `repository` claim name.
 
 ## Next
 
-- [06-pipeline.md](06-pipeline.md): all of this wired together
+- [06-pipeline.md](../docs/06-pipeline.md): all of this wired together

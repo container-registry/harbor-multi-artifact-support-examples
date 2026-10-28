@@ -1,12 +1,12 @@
 # npm
 
-[← Harbor setup](02-harbor-setup.md) · [Maven →](04-maven.md)
+[← Harbor setup](../docs/02-harbor-setup.md) · [Maven →](../maven/README.md)
 
 One npm registry URL does both jobs: it resolves `vue` and `vite` from
 npmjs.org through the proxy cache, and it resolves `todomvc-todo-ui`, which this
 repository publishes, from local storage. That is what
 `proxy_cache_allow_push=true` on the `todomvc-npm` project buys; see
-[01-concepts.md](01-concepts.md).
+[01-concepts.md](../docs/01-concepts.md).
 
 ## Point npm at the project
 
@@ -24,7 +24,7 @@ tarball downloads too, not only on metadata requests.
 The same `registry=` line is also the publish target — there is deliberately no
 `publishConfig` in `package.json`, so `.npmrc` is the single source of truth for
 reads and writes. Retargeting the whole flow (say, at a local dev instance, see
-[07-local-dev.md](07-local-dev.md)) means editing exactly one file.
+[07-local-dev.md](../docs/07-local-dev.md)) means editing exactly one file.
 
 ## Authenticate
 
@@ -147,7 +147,7 @@ The first case is what makes a rerun of a CI job safe. The second is what stops
 a version's contents from changing under consumers who already resolved it. Treat
 the 409 as correct behaviour, not as an obstacle: bump the version. The pipeline
 versions by `github.run_number` for exactly this reason
-([06-pipeline.md](06-pipeline.md)).
+([06-pipeline.md](../docs/06-pipeline.md)).
 
 ## Pull it back
 
@@ -271,5 +271,5 @@ npm ci --registry=https://registry.npmjs.org
 
 ## Next
 
-- [04-maven.md](04-maven.md)
-- [05-images-wif.md](05-images-wif.md)
+- [04: Maven](../maven/README.md)
+- [05: Images and keyless auth](../images/README.md)

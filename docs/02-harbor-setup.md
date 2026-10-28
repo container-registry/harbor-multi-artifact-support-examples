@@ -1,6 +1,6 @@
 # Harbor setup
 
-[← Concepts](01-concepts.md) · [npm →](03-npm.md)
+[← Concepts](01-concepts.md) · [npm →](../npm/README.md)
 
 Everything in this page is done through the Harbor API with `curl`. All of it is
 also scripted, idempotently, in [`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh):
@@ -266,6 +266,6 @@ The equivalent check the pipeline runs before it publishes anything is in
 
 ## Next
 
-- [03-npm.md](03-npm.md)
-- [04-maven.md](04-maven.md)
-- [05-images-wif.md](05-images-wif.md)
+- [03: npm](../npm/README.md)
+- [04: Maven](../maven/README.md)
+- [05: Images and keyless auth](../images/README.md)

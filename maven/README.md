@@ -1,6 +1,6 @@
 # Maven
 
-[← npm](03-npm.md) · [Images and WIF →](05-images-wif.md)
+[← npm](../npm/README.md) · [Images and WIF →](../images/README.md)
 
 Same shape as npm: one URL that both proxies Maven Central and hosts the jar this
 repository publishes.
@@ -323,7 +323,7 @@ start by giving those two branches a log line.
 [`.mvn/settings-upstream.xml`](../apps/todo-api/.mvn/settings-upstream.xml), that
 keeps the `<server>` entry so `deploy` still authenticates while resolution goes
 straight to Maven Central. The image build uses it by default and
-[the pipeline](06-pipeline.md) switches to the mirrored settings only when its
+[the pipeline](../docs/06-pipeline.md) switches to the mirrored settings only when its
 preflight says the endpoint is answering, falling back if the mirrored build
 fails. If you hit this by hand, pass `-U` or delete the `*.lastUpdated` files
 Maven wrote before retrying: Maven caches the failure and will not re-ask
@@ -331,5 +331,5 @@ otherwise.
 
 ## Next
 
-- [05-images-wif.md](05-images-wif.md)
-- [06-pipeline.md](06-pipeline.md)
+- [05: Images and keyless auth](../images/README.md)
+- [06-pipeline.md](../docs/06-pipeline.md)

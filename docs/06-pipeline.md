@@ -1,6 +1,6 @@
 # The pipeline
 
-[← Images and WIF](05-images-wif.md) · [Concepts](01-concepts.md)
+[← Images and WIF](../images/README.md) · [Concepts](01-concepts.md)
 
 Three files build both apps and publish three kinds of artifact into one
 registry, with no stored secret:
@@ -242,10 +242,10 @@ mvn -B verify                                    # straight to Maven Central
 
 Note the retry. A reachable endpoint is not proof it can serve a whole dependency
 tree: the Maven proxy stops fetching cold coordinates without saying so
-([04-maven.md](04-maven.md#the-failure-mode-to-know-about)). Falling back keeps
+([04: Maven](../maven/README.md#the-failure-mode-to-know-about)). Falling back keeps
 the build honest about where the packages came from instead of failing opaquely.
 The npm job does the same, for the partial packuments in
-[03-npm.md](03-npm.md#where-the-proxy-cache-is-still-rough-partial-packuments).
+[03: npm](../npm/README.md#where-the-proxy-cache-is-still-rough-partial-packuments).
 
 The settings file is what redirects resolution, via `mirrorOf=*`, and it is also
 what supplies credentials, via the `<server>` entry whose id matches. Dropping the
@@ -263,7 +263,7 @@ file actually resolved, so a publish never goes through a mirror that just faile
 `steps.version.outputs.version` is this job's own version step, not a shared one;
 see [Artifact versions](#artifact-versions) for why it is computed per publisher
 rather than once in `preflight`. Details on Maven immutability in
-[04-maven.md](04-maven.md).
+[04: Maven](../maven/README.md).
 
 Publishing is gated on `inputs.publish`: pull requests build and resolve, but do
 not write to the registry.
@@ -283,7 +283,7 @@ Three deliberate details:
 
 - `_auth`, not `_authToken`. Harbor's npm endpoint takes HTTP Basic. `_authToken`
   sends a Bearer header and gets a 401, despite what the portal's Usage tab
-  suggests ([03-npm.md](03-npm.md)).
+  suggests ([03: npm](../npm/README.md)).
 - `add-mask` on the base64 string. The token itself is already masked, but its
   base64 encoding is a different string and is an equally usable credential.
 - The line is appended to the committed
@@ -395,7 +395,7 @@ No secret needs to be added to the repository. That is the entire point.
 
 - [01-concepts.md](01-concepts.md)
 - [02-harbor-setup.md](02-harbor-setup.md)
-- [03-npm.md](03-npm.md)
-- [04-maven.md](04-maven.md)
-- [05-images-wif.md](05-images-wif.md)
+- [03: npm](../npm/README.md)
+- [04: Maven](../maven/README.md)
+- [05: Images and keyless auth](../images/README.md)
 - [07-local-dev.md](07-local-dev.md)

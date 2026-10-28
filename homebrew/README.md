@@ -313,7 +313,7 @@ end
 ### Install
 
 Same blocked-hosts client as above, same `brew.env`. The tap is the git
-repository you created from [`tap/`](tap/):
+repository you created from [`tap/`](tap):
 
 ```console
 $ brew tap acme/tools https://git.internal/acme/homebrew-tools
@@ -403,4 +403,4 @@ HARBOR_PASS=... BREW_ENV=brew.env ./docs/demos/scripts/04-homebrew.py
 ## Next
 
 - [01-concepts.md](../docs/01-concepts.md): native hosting vs proxy cache
-- [03-npm.md](../docs/03-npm.md) / [04-maven.md](../docs/04-maven.md): ecosystems where you can also publish
+- [03: npm](../npm/README.md) / [04: Maven](../maven/README.md): ecosystems where you can also publish

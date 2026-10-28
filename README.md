@@ -31,9 +31,9 @@ npmjs.org and the package your pipeline published:
 |---|---|
 | [01: Concepts](docs/01-concepts.md) | Native hosting vs proxy cache, precedence, `proxy_cache_allow_push` |
 | [02: Registry setup](docs/02-harbor-setup.md) | Endpoints, projects, federated identity, secretless robot |
-| [03: npm](docs/03-npm.md) | Package it, publish it, proxy through it, pull it back |
-| [04: Maven](docs/04-maven.md) | The same four steps for Maven |
-| [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
+| [03: npm](npm/README.md) | Package it, publish it, proxy through it, pull it back |
+| [04: Maven](maven/README.md) | The same four steps for Maven |
+| [05: Images and keyless auth](images/README.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
 | [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
 | [08: Homebrew](homebrew/README.md) | `brew install` on intranet machines that cannot reach Homebrew, plus your own tools |
@@ -116,9 +116,12 @@ The username is ignored. The token expires in minutes. Nothing is stored in
 apps/todo-api/      Spring Boot + H2 backend. The Maven artifact.
 apps/todo-ui/       Vue 3 TodoMVC frontend. The npm artifact.
 .github/workflows/  The pipeline that publishes all three artifact kinds.
+npm/                npm guide: package, publish, proxy, pull back.
+maven/              Maven guide: the same four steps for Maven.
+images/             Container images guide: keyless push and pull.
 homebrew/           Homebrew use case: guide, setup script, example tap, diagrams.
 scripts/            Idempotent registry provisioning.
-docs/               The guide.
+docs/               Concepts, registry setup, pipeline, local dev, recorded demos.
 ```
 
 ## Every command here was run
