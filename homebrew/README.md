@@ -56,9 +56,16 @@ One script does it, idempotently:
 ```bash
 export HARBOR_URL=https://8gcr.container-registry.dev
 export HARBOR_PASS=...                          # admin password
-export API="$HARBOR_URL/api/v2.0" PASS="$HARBOR_PASS"   # used by the curl examples below
 ./homebrew/setup-homebrew.py --out brew.env
+
+# for the curl examples below: credentials in a mode-600 config, not on the command line
+export API="$HARBOR_URL/api/v2.0" CURLRC="$(mktemp)"
+chmod 600 "$CURLRC" && printf 'user = "admin:%s"\n' "$HARBOR_PASS" > "$CURLRC"
 ```
+
+`printf` is a shell builtin, so the password never appears in a process
+argument list. A password containing `"` or `\` needs escaping in the curl
+config, as [`scripts/setup-8gcr.sh`](../scripts/setup-8gcr.sh) does.
 
 ```
 ==> https://8gcr.container-registry.dev
@@ -192,7 +199,7 @@ Each installed bottle is a Harbor artifact of type `HOMEBREW`, tagged with the
 formula version, one layer per platform pulled:
 
 ```console
-$ curl -su "admin:$PASS" "$API/projects/brew-priv/repositories" \
+$ curl -s -K "$CURLRC" "$API/projects/brew-priv/repositories" \
     | jq -r '.[] | [.name, .artifact_count, .pull_count] | @tsv'
 brew-priv/homebrew/core/oniguruma   1   8
 brew-priv/homebrew/core/jq          2   20
@@ -201,7 +208,7 @@ brew-priv/homebrew/core/jq          2   20
 Every download is in the audit log under the robot that made it:
 
 ```console
-$ curl -su "admin:$PASS" "$API/auditlog-exts?page_size=4&q=resource%3D~brew-priv" \
+$ curl -s -K "$CURLRC" "$API/auditlog-exts?page_size=4&q=resource%3D~brew-priv" \
     | jq -r '.[] | [.op_time, .username, .operation, .resource] | @tsv'
 2026-10-27T13:46:05Z  bot_brew-priv+brew-puller  pull  brew-priv/homebrew/core/jq:1.8.2-1
 2026-10-27T13:46:04Z  bot_brew-priv+brew-puller  pull  brew-priv/homebrew/core/oniguruma:6.9.10
@@ -235,15 +242,15 @@ A private project, a push robot for CI, and one system robot the clients use
 for both projects, so a single `brew.env` covers proxy and internal tools:
 
 ```bash
-curl -su "admin:$PASS" -H 'Content-Type: application/json' -X POST "$API/projects" \
+curl -s -K "$CURLRC" -H 'Content-Type: application/json' -X POST "$API/projects" \
   -d '{"project_name":"internal-tools","metadata":{"public":"false"}}'
 
-curl -su "admin:$PASS" -H 'Content-Type: application/json' -X POST "$API/robots" -d '{
+curl -s -K "$CURLRC" -H 'Content-Type: application/json' -X POST "$API/robots" -d '{
   "name":"publisher","duration":-1,"level":"project","permissions":[
     {"kind":"project","namespace":"internal-tools","access":[
       {"resource":"repository","action":"push"},{"resource":"repository","action":"pull"}]}]}'
 
-curl -su "admin:$PASS" -H 'Content-Type: application/json' -X POST "$API/robots" -d '{
+curl -s -K "$CURLRC" -H 'Content-Type: application/json' -X POST "$API/robots" -d '{
   "name":"brew-client","duration":-1,"level":"system","permissions":[
     {"kind":"project","namespace":"brew-priv","access":[{"resource":"repository","action":"pull"}]},
     {"kind":"project","namespace":"internal-tools","access":[{"resource":"repository","action":"pull"}]}]}'
