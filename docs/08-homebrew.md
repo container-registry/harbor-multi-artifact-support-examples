@@ -43,8 +43,10 @@ blocked inside the container.
 One script does it, idempotently:
 
 ```bash
-HARBOR_URL=https://8gcr.container-registry.dev HARBOR_PASS=... \
-  ./scripts/setup-homebrew.py --out brew.env
+export HARBOR_URL=https://8gcr.container-registry.dev
+export HARBOR_PASS=...                          # admin password
+export API="$HARBOR_URL/api/v2.0" PASS="$HARBOR_PASS"   # used by the curl examples below
+./scripts/setup-homebrew.py --out brew.env
 ```
 
 ```

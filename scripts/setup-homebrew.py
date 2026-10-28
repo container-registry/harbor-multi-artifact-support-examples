@@ -90,6 +90,10 @@ def ensure_project(h, registry_id):
     if p.get("registry_id") != registry_id:
         die(f"project {PROJECT} proxies registry {p.get('registry_id')}, expected "
             f"{registry_id}. Delete the project and re-run.")
+    # Not made private here: anonymous consumers of a public project would break silently.
+    if (p.get("metadata") or {}).get("public") != "false":
+        die(f"project {PROJECT} is public, so anyone can pull without the robot. "
+            "Make it private or delete it, then re-run.")
     ok(f"project {PROJECT} id={p['project_id']} (private, proxy cache)")
     return p["project_id"]
 
@@ -150,6 +154,8 @@ def main():
     project_id = ensure_project(h, ensure_endpoint(h))
     name, secret = ensure_robot(h, project_id)
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    # The mode above applies only to a new file; an existing one keeps its own.
+    os.fchmod(fd, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(client_env(url, name, secret))
     ok(f"client settings written to {args.out} (contains the robot secret)")
