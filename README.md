@@ -36,7 +36,7 @@ npmjs.org and the package your pipeline published:
 | [05: Images and keyless auth](docs/05-images-wif.md) | Push and pull with no stored credential |
 | [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
 | [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
-| [08: Homebrew](docs/08-homebrew.md) | brew metadata + bottles through one proxy project |
+| [08: Homebrew](homebrew/README.md) | `brew install` on intranet machines that cannot reach Homebrew, plus your own tools |
 | [Recorded demos](docs/demos/README.md) | Every flow above, recorded end to end against a fresh instance |
 
 ## The five-minute path
@@ -116,6 +116,7 @@ The username is ignored. The token expires in minutes. Nothing is stored in
 apps/todo-api/      Spring Boot + H2 backend. The Maven artifact.
 apps/todo-ui/       Vue 3 TodoMVC frontend. The npm artifact.
 .github/workflows/  The pipeline that publishes all three artifact kinds.
+homebrew/           Homebrew use case: guide, setup script, example tap, diagrams.
 scripts/            Idempotent registry provisioning.
 docs/               The guide.
 ```

@@ -1,12 +1,13 @@
 # Recorded demos
 
 Every flow in this repository, recorded end to end with
-[asciinema](https://asciinema.org/) against a **freshly wiped** local Harbor
-Next dev instance (`localhost:8080`, state volumes deleted first — nothing
+[asciinema](https://asciinema.org/). Demos 00 to 03 ran against a **freshly
+wiped** local Harbor Next dev instance (`localhost:8080`, state volumes deleted first — nothing
 was cached, nothing pre-created except what each recording shows). The
 scripts that produced them are in [`scripts/`](scripts/) and print every
 command before running it, so each recording doubles as a copy-pasteable
-walkthrough.
+walkthrough. Demo 04 (Homebrew) is the exception: it ran against the hosted
+`https://8gcr.container-registry.dev`, see its section.
 
 Formats per demo: an animated GIF (inline below), an `.mp4`, and the
 original `.cast` (replay locally with `asciinema play <file>.cast`;
@@ -49,11 +50,13 @@ copy, pull it back. See [05-images-wif.md](../05-images-wif.md).
 
 ## 04 — Homebrew
 
-Create the Homebrew endpoint and proxy project, fetch formula metadata,
-resolve a bottle digest from the version manifest, cold pull (round-trips to
-GHCR) vs warm pull (served from Harbor, ~10× faster, byte-identical), and
-where it lands: repository, pull count, audit log.
-[mp4](04-homebrew.mp4) · [cast](04-homebrew.cast) · [script](scripts/04-homebrew.sh)
+An intranet client: every Homebrew host is blocked inside the container, only
+Harbor is reachable. The real `brew install jq` pulls formula metadata,
+manifests and bottles through the `brew-priv` proxy project as a pull-only
+robot, then the Harbor side shows the cached repositories and the robot's
+pulls in the audit log. Recorded against `https://8gcr.container-registry.dev`
+on 2026-10-28, not against a fresh local instance, after `homebrew/setup-homebrew.py`. See [homebrew/README.md](../../homebrew/README.md).
+[mp4](04-homebrew.mp4) · [cast](04-homebrew.cast) · [script](scripts/04-homebrew.py)
 
 ![Homebrew](04-homebrew.gif)
 
@@ -66,8 +69,9 @@ HARBOR_SRC=~/code/harbor ./scripts/00-fresh-setup.sh
 ./scripts/01-npm.sh
 ./scripts/02-maven.sh
 ./scripts/03-images.sh
-./scripts/04-homebrew.sh
+HARBOR_PASS=... ../../homebrew/setup-homebrew.py --out brew.env
+HARBOR_PASS=... BREW_ENV=brew.env ./scripts/04-homebrew.py
 ```
 
-Recorded 2026-08-31 with `asciinema rec --headless --window-size 100x30 -i 2`,
+Demos 00 to 03 recorded 2026-08-31, demo 04 on 2026-10-28, with `asciinema rec --headless --window-size 100x30 -i 2`,
 rendered with `agg`, converted with `ffmpeg`.

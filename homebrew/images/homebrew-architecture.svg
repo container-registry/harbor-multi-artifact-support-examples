@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 510" role="img" aria-label="Intranet laptops pull from Harbor and tap formulas from an internal git server; CI pushes internal tools to Harbor. Only Harbor's brew-priv proxy reaches formulae.brew.sh, ghcr.io and pkg-containers.githubusercontent.com. Direct client access to the internet is blocked.">
+  <style>
+    text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #22262d; }
+    .zl { font-size: 15px; font-weight: 600; letter-spacing: .14em; fill: #5f6772; }
+    .nt { font-size: 22px; font-weight: 600; }
+    .nth { font-size: 28px; font-weight: 700; fill: #d03808; }
+    .ns { font-size: 17px; fill: #5f6772; }
+    .nm { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 16px; }
+    .nm2 { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 18px; font-weight: 600; }
+    .lm { font-size: 15px; fill: #5f6772; }
+    .lr { font-size: 16px; font-weight: 600; fill: #c62f28; }
+    .zone { fill: #f1f3f6; }
+    .node { fill: #ffffff; stroke: #cfd4db; stroke-width: 2; }
+    .harbor { fill: #fcebe3; stroke: #d03808; stroke-width: 3; }
+    .hp { fill: #ffffff; stroke: #d03808; stroke-width: 1.5; }
+    .edge { stroke: #3b3f46; stroke-width: 2.5; fill: none; }
+    .blocked { stroke: #c62f28; stroke-width: 2.5; fill: none; stroke-dasharray: 7 6; }
+    .fw { stroke: #5f6772; stroke-width: 2; stroke-dasharray: 3 7; }
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#3b3f46"/></marker>
+    <marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#c62f28"/></marker>
+  </defs>
+  <rect width="1200" height="510" fill="#ffffff"/>
+
+  <rect class="zone" x="10" y="40" width="360" height="420" rx="4"/>
+  <text class="zl" x="34" y="72">INTRANET</text>
+  <rect class="node" x="40" y="92" width="300" height="80" rx="3"/>
+  <text class="nt" x="62" y="126">Developer laptop</text><text class="ns" x="62" y="155">brew install jq, acme-hello</text>
+  <rect class="node" x="40" y="202" width="300" height="80" rx="3"/>
+  <text class="nt" x="62" y="236">Internal git server</text><text class="ns" x="62" y="265">tap acme/tools: formulas</text>
+  <rect class="node" x="40" y="312" width="300" height="80" rx="3"/>
+  <text class="nt" x="62" y="346">CI runner</text><text class="ns" x="62" y="375">builds and pushes tools</text>
+  <path class="edge" d="M110 202 L110 178" marker-end="url(#ah)"/>
+  <text class="lm" x="124" y="194">brew tap</text>
+
+  <rect class="harbor" x="420" y="92" width="260" height="316" rx="4"/>
+  <text class="nth" x="440" y="132">Harbor</text>
+  <rect class="hp" x="436" y="150" width="228" height="110" rx="3"/>
+  <text class="nm2" x="452" y="186">brew-priv</text>
+  <text class="ns" x="452" y="214">proxy cache</text>
+  <text class="ns" x="452" y="240">public bottles</text>
+  <rect class="hp" x="436" y="278" width="228" height="110" rx="3"/>
+  <text class="nm2" x="452" y="314">internal-tools</text>
+  <text class="ns" x="452" y="342">OCI project</text>
+  <text class="ns" x="452" y="368">your own tools</text>
+  <text class="lm" x="550" y="434" text-anchor="middle">one pull-only robot for both</text>
+
+  <path class="edge" d="M340 132 L429 190" marker-end="url(#ah)"/>
+  <text class="lm" x="372" y="134" text-anchor="middle">pull</text>
+  <path class="edge" d="M340 352 L429 330" marker-end="url(#ah)"/>
+  <text class="lm" x="380" y="374" text-anchor="middle">push</text>
+
+  <line class="fw" x1="715" y1="20" x2="715" y2="468"/>
+  <text class="lm" x="715" y="494" text-anchor="middle">firewall: only Harbor may go out</text>
+
+  <rect class="zone" x="740" y="40" width="450" height="420" rx="4"/>
+  <text class="zl" x="1166" y="72" text-anchor="end">INTERNET</text>
+  <rect class="node" x="765" y="100" width="400" height="84" rx="3"/>
+  <text class="nm" x="787" y="136">formulae.brew.sh</text><text class="ns" x="787" y="164">formula metadata</text>
+  <rect class="node" x="765" y="208" width="400" height="84" rx="3"/>
+  <text class="nm" x="787" y="244">ghcr.io</text><text class="ns" x="787" y="272">bottle manifests and blobs</text>
+  <rect class="node" x="765" y="316" width="400" height="84" rx="3"/>
+  <text class="nm" x="787" y="352">pkg-containers.githubusercontent.com</text><text class="ns" x="787" y="380">where ghcr.io redirects blob downloads</text>
+
+  <path class="edge" d="M664 205 L758 142" marker-end="url(#ah)"/>
+  <path class="edge" d="M664 205 L758 250" marker-end="url(#ah)"/>
+  <path class="edge" d="M664 205 L758 358" marker-end="url(#ah)"/>
+
+  <path class="blocked" d="M190 90 C190 15, 600 10, 759 92" marker-end="url(#ahr)"/>
+  <circle cx="715" cy="74" r="15" fill="#ffffff" stroke="#c62f28" stroke-width="2.5"/>
+  <path d="M708 67 L722 81 M722 67 L708 81" stroke="#c62f28" stroke-width="3" stroke-linecap="round"/>
+  <text class="lr" x="450" y="66" text-anchor="middle">direct access blocked</text>
+</svg>
