@@ -61,7 +61,9 @@ class Harbor:
         req = urllib.request.Request(
             self.api + path, method=method,
             data=None if body is None else json.dumps(body).encode(),
-            headers={"Authorization": self.auth, "Content-Type": "application/json"})
+            headers={"Content-Type": "application/json"})
+        # Unredirected: urllib would otherwise replay admin credentials to a redirect target.
+        req.add_unredirected_header("Authorization", self.auth)
         try:
             with urllib.request.urlopen(req) as resp:
                 code, raw = resp.status, resp.read()
@@ -91,6 +93,8 @@ def ensure_endpoints(h):
         if reg["type"] != typ or reg["url"].rstrip("/") != url:
             die(f"endpoint {name} is {reg['type']} -> {reg['url']}, expected {typ} -> {url}. "
                 "Delete it and re-run.")
+        if reg.get("insecure"):
+            die(f"endpoint {name} skips TLS verification (insecure=true). Edit it or delete it and re-run.")
         ids[name] = reg["id"]
         ok(f"endpoint {name} id={reg['id']} -> {url}")
     return ids
@@ -113,12 +117,22 @@ def ensure_projects(h, endpoint_ids):
         if p.get("registry_id") != rid or (p.get("metadata") or {}).get("proxy_cache_allow_push") != "true":
             die(f"project {name} must proxy registry {rid} with publishing allowed. "
                 "Delete it and re-run.")
-        ok(f"project {name} (proxy cache of {endpoint}, publishing allowed)")
+        # The pipeline's preflight probes these anonymously; a private project skips publishing.
+        if (p.get("metadata") or {}).get("public") != "true":
+            die(f"project {name} is private, so the pipeline's anonymous preflight gets 401 and "
+                "skips publishing. Make it public (Project -> Configuration) and re-run.")
+        ok(f"project {name} (proxy cache of {endpoint}, public, publishing allowed)")
     code, _ = h.call("GET", f"/projects/{IMAGE_PROJECT}", expect=(200, 404))
     if code == 404:
         h.call("POST", "/projects", {"project_name": IMAGE_PROJECT, "metadata": {"public": "true"}},
                expect=(201,))
-    ok(f"project {IMAGE_PROJECT} (OCI images)")
+    _, p = h.call("GET", f"/projects/{IMAGE_PROJECT}")
+    if p.get("registry_id"):
+        die(f"project {IMAGE_PROJECT} is a proxy cache of registry {p['registry_id']}; pushes need a "
+            "plain project. Delete it and re-run.")
+    if (p.get("metadata") or {}).get("public") != "true":
+        die(f"project {IMAGE_PROJECT} is private. Make it public (Project -> Configuration) and re-run.")
+    ok(f"project {IMAGE_PROJECT} (OCI images, public)")
 
 
 def ensure_issuer(h, audience):
@@ -131,6 +145,9 @@ def ensure_issuer(h, audience):
             "openid_config_url": f"{GITHUB_OIDC}/.well-known/openid-configuration",
             "offline_validation": False, "audience": audience}, expect=(201,))
         issuer = h.find("/trusted-issuers", ISSUER)
+    if issuer.get("offline_validation"):
+        die(f"trusted issuer {ISSUER} uses offline validation, so GitHub's key rotation would break CI. "
+            "Delete it and re-run.")
     if issuer.get("issuer") != GITHUB_OIDC or issuer.get("audience") != audience:
         die(f"trusted issuer {ISSUER} is {issuer.get('issuer')} / aud {issuer.get('audience')}, "
             f"expected {GITHUB_OIDC} / aud {audience}. The audience is immutable; delete it and re-run.")
@@ -160,9 +177,11 @@ def ensure_robot(h, issuer_id):
     # The update must echo the stored name and level, prefix included.
     h.call("PUT", f"/robots/{robot['id']}", {
         "name": robot["name"], "level": robot["level"], "description": robot.get("description") or "",
-        "duration": robot.get("duration", -1), "disable": robot.get("disable", False),
-        "permissions": perms})
-    ok(f"robot {robot['name']} id={robot['id']} (no secret, push/pull on all demo projects)")
+        "duration": -1, "disable": False, "permissions": perms})
+    _, robot = h.call("GET", f"/robots/{robot['id']}")
+    if robot.get("disable") or robot.get("expires_at", -1) not in (-1, 0, None):
+        die(f"robot {robot['name']} is still disabled or expiring after reconcile. Delete it and re-run.")
+    ok(f"robot {robot['name']} id={robot['id']} (enabled, no expiry, no secret, push/pull on all demo projects)")
     return robot["id"]
 
 
