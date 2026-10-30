@@ -32,8 +32,8 @@ The same setup script works; point it at the dev instance and skip the
 GitHub-OIDC parts (no CI tokens locally):
 
 ```bash
-HARBOR_URL=http://localhost:8080 HARBOR_PASS=Harbor12345 SKIP_WIF=1 \
-  ./scripts/setup-8gcr.sh
+HARBOR_URL=http://localhost:8080 HARBOR_PASS=Harbor12345 \
+  ./scripts/setup-8gcr.py --skip-wif
 ```
 
 That creates the `npmjs` and `maven-central` endpoints plus the

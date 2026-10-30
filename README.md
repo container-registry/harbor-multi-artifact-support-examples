@@ -47,7 +47,7 @@ Provision the registry side. This is idempotent, so re-running it is safe:
 export HARBOR_URL=https://8gcr.container-registry.dev
 export HARBOR_USER=admin HARBOR_PASS=...
 export GITHUB_REPO=your-org/your-repo
-./scripts/setup-8gcr.sh
+./scripts/setup-8gcr.py
 ```
 
 It creates two proxy-cache registry endpoints, three projects, a federated identity
@@ -93,7 +93,7 @@ step 3 lists them.
 
 There is no token exchange and no secret to rotate. The pipeline asks GitHub for an OIDC
 token and hands it straight to the registry as the HTTP Basic **password**. Harbor
-validates the signature against the identity provider's JWKS and matches the token's
+validates the signature against the trusted issuer's JWKS and matches the token's
 claims to a robot account.
 
 ```yaml

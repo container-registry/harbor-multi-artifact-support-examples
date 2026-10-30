@@ -23,7 +23,7 @@ printf '%s' "$OIDC_JWT" | docker login 8gcr.container-registry.dev -u jwt --pass
 The username is ignored. `jwt` is a convention that makes logs readable.
 
 Harbor's `robotjwt` authenticator sees that the Basic password parses as a JWT,
-reads its issuer, finds the federated IdP registered for that issuer, validates
+reads its issuer and audience, finds the trusted issuer registered for that pair, validates
 the signature against that provider's JWKS, and then matches the token's claims
 against the configured claim rules to decide which robot account it is. From that
 point on the request is an ordinary robot request with that robot's project
@@ -135,7 +135,7 @@ reconstructed from claims each time, not carried over from the push.
 
 ## Doing it without GitHub
 
-Any OIDC issuer works. Register it with `POST /api/v2.0/federated-idps`, add claim
+Any OIDC issuer works. Register it with `POST /api/v2.0/trusted-issuers`, add claim
 rules that match whatever claims it emits, and hand its token to `docker login` as
 the password. Nothing in the Harbor side is GitHub-specific; the only GitHub
 detail is `core.getIDToken()` and the `repository` claim name.

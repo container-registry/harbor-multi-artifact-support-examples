@@ -16,8 +16,8 @@ long pauses are capped at 2 s).
 ## 00 — Fresh setup
 
 Backend containers up, wait for core, enable the multi-format feature gate,
-provision endpoints and projects with `scripts/setup-8gcr.sh`.
-[mp4](00-fresh-setup.mp4) · [cast](00-fresh-setup.cast) · [script](scripts/00-fresh-setup.sh)
+provision endpoints and projects with `scripts/setup-8gcr.py`.
+[mp4](00-fresh-setup.mp4) · [cast](00-fresh-setup.cast) · [script](scripts/00-fresh-setup.py)
 
 ![Fresh setup](00-fresh-setup.gif)
 
@@ -64,7 +64,7 @@ on 2026-10-28, not against a fresh local instance, after `homebrew/setup-homebre
 
 ```bash
 # 00 needs a harbor checkout for the compose file:
-HARBOR_SRC=~/code/harbor ./scripts/00-fresh-setup.sh
+HARBOR_SRC=~/code/harbor ./scripts/00-fresh-setup.py
 # the rest run from anywhere inside this repo:
 ./scripts/01-npm.sh
 ./scripts/02-maven.sh
