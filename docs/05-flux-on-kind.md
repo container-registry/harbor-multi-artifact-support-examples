@@ -134,19 +134,7 @@ NAME                                         READY   STATUS
 helmrelease.helm.toolkit.fluxcd.io/todomvc   True    Helm install succeeded for release todomvc/todomvc.v1 with chart todomvc@0.1.12+81560196a69f
 ```
 
-The OCIRepository was ready 4 s after apply, the HelmRelease 26 s later. When
-the next publish run pushed chart 0.1.13, Flux picked it up on its own within
-the one-minute interval (`semver: ">=0.1.0-0"`) and the kubelet pulled the new
-images the same way:
-
-```console
-$ kubectl -n todomvc get helmrelease todomvc -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}'
-Helm upgrade succeeded for release todomvc/todomvc.v2 with chart todomvc@0.1.13+e05977683c43
-$ kubectl -n todomvc get pods -o custom-columns='N:.metadata.name,READY:.status.containerStatuses[0].ready,IMG:.spec.containers[0].image'
-N                           READY   IMG
-todo-api-59cbb49797-7dtk5   true    demo.container-registry.com/todomvc/todo-api:bfa6cd622e89eddf64c7845059ce0d64f7ac1f6f
-todo-ui-58c7864f97-tf7b5    true    demo.container-registry.com/todomvc/todo-ui:bfa6cd622e89eddf64c7845059ce0d64f7ac1f6f
-```
+The OCIRepository was ready 4 s after apply, the HelmRelease 26 s later.
 [`deploy/flux/namespace.yaml`](../deploy/flux/namespace.yaml) holds the
 annotated ServiceAccount and a Role that lets source-controller mint tokens for
 that one account. Flux 2.10 removed `serviceaccounts/token` from its default
@@ -171,6 +159,19 @@ $ curl -s -X POST -H 'Content-Type: application/json' -d '{"title":"pulled keyle
 ```
 
 ![The app running on kind](images/todomvc-app.png)
+
+When the next publish run pushed chart 0.1.13, Flux picked it up on its own
+within the OCIRepository's one-minute interval, and the kubelet pulled the new
+images the same way:
+
+```console
+$ kubectl -n todomvc get helmrelease todomvc -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}'
+Helm upgrade succeeded for release todomvc/todomvc.v2 with chart todomvc@0.1.13+e05977683c43
+$ kubectl -n todomvc get pods -o custom-columns='N:.metadata.name,READY:.status.containerStatuses[0].ready,IMG:.spec.containers[0].image'
+N                           READY   IMG
+todo-api-59cbb49797-7dtk5   true    demo.container-registry.com/todomvc/todo-api:bfa6cd622e89eddf64c7845059ce0d64f7ac1f6f
+todo-ui-58c7864f97-tf7b5    true    demo.container-registry.com/todomvc/todo-ui:bfa6cd622e89eddf64c7845059ce0d64f7ac1f6f
+```
 
 ## 4. Proof that the token is what grants access
 

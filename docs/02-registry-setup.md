@@ -61,8 +61,8 @@ $ ./scripts/setup-8gcr.py
 
 On a fresh instance this took 17 s. For your own fork, set
 `GITHUB_REPO=<owner>/<repo>`. A rerun reconciles the robots' permissions and
-claim rules; the output above was captured before `todomvc-ci` gained the
-`ref` rule, which the rerun added.
+claim rules. The `todomvc-ci` line above is from such a rerun, which added the
+`ref` rule to the robot the first run had created.
 
 ## What it does, as API calls
 
