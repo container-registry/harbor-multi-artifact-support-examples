@@ -100,8 +100,7 @@ $ ./scripts/setup-8gcr.py kind
 
 It reads `/.well-known/openid-configuration` and `/openid/v1/jwks` through
 kubectl. A recreated cluster has new keys; rerunning the command replaces the
-pinned set. The demo is shared, so the last cluster to run it is the one Harbor
-trusts.
+pinned set.
 
 ![Trusted issuers](images/portal-trusted-issuers.png)
 
@@ -212,5 +211,4 @@ kind delete cluster --name todomvc
 ```
 
 The trusted issuer `kind-todomvc` stays in Harbor with keys nobody holds any
-more; delete it under **Administration → Trusted Issuers** or leave it for the
-weekly reset.
+more; delete it under **Administration → Trusted Issuers**.

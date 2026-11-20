@@ -4,8 +4,7 @@
 
 [`scripts/setup-8gcr.py`](../scripts/setup-8gcr.py) is the only provisioning
 step. It is idempotent and checks every existing object against what it would
-create, so it is safe to rerun. **The demo instance is wiped every Sunday at
-03:17 UTC; rerun the setup after a reset.**
+create, so it is safe to rerun.
 
 ## Requirements
 

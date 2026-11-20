@@ -1,8 +1,8 @@
 # One registry, keyless, from source to cluster
 
 The complete, runnable example of [8gcr](https://container-registry.com/8gcr)
-(Harbor Next 2.16) as the only artifact store of a project, run against the
-public demo at `https://demo.container-registry.com`. A Java/Maven backend and
+(Harbor Next 2.16) as the only artifact store of a project, run against
+`https://demo.container-registry.com`. A Java/Maven backend and
 an npm frontend are built in GitHub Actions, packaged as container images and a
 Helm chart, and deployed by Flux to a Kubernetes cluster. Every dependency comes
 through Harbor, every artifact goes into Harbor, and no registry secret is
@@ -105,11 +105,8 @@ kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.10.0/insta
 kubectl apply -f deploy/flux/
 ```
 
-**The demo is wiped every Sunday at 03:17 UTC. Rerun `./scripts/setup-8gcr.py`
-(and `kind` for a running cluster) after a reset**, then run the publish
-workflow once so there is a chart to deploy. Every account on the demo is an
-admin, so anyone can change these projects; the setup script reports anything
-that no longer matches.
+`demo.container-registry.com` is a shared public demo; you can log in and look
+around. To run the flow yourself, point it at your own 8gcr instance.
 
 ## Repository layout
 
