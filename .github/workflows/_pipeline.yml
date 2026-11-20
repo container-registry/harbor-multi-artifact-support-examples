@@ -99,7 +99,7 @@ jobs:
 
           # Routing is necessary but not sufficient: the proxy has been observed
           # answering as a package API while serving truncated packuments and
-          # 404s for pinned tarballs (issue container-registry/8gcr#360). Since
+          # 404s for pinned tarballs (issue container-registry/8gcr-ee#360). Since
           # `docker build` and `npm ci` resolve the lockfile's exact pins, probe
           # one of those pins for real before routing builds at the proxy.
           if [ "$npm_ready" = "true" ]; then

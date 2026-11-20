@@ -2,7 +2,7 @@
 
 Every flow in this repository, recorded end to end with
 [asciinema](https://asciinema.org/). Demos 00 to 03 ran against a **freshly
-wiped** local Harbor Next dev instance (`localhost:8080`, state volumes deleted first — nothing
+wiped** local 8gcr dev instance (`localhost:8080`, state volumes deleted first — nothing
 was cached, nothing pre-created except what each recording shows). The
 scripts that produced them are in [`scripts/`](scripts) and print every
 command before running it, so each recording doubles as a copy-pasteable
