@@ -1,6 +1,7 @@
-# Checks the npm example without credentials: the setup script compiles and the
-# sample installs through the public npmjs proxy and packs. Publishing needs a
-# robot secret and is part of the walkthrough, not of CI.
+# Checks the npm example without credentials: the setup script's imports and
+# arguments, an install of a public package through the npmjs proxy with the
+# sample's .npmrc, and what the sample would pack. Publishing needs a robot
+# secret and is part of the walkthrough, not of CI.
 name: artifact npm
 
 on:
@@ -27,8 +28,10 @@ jobs:
         with:
           node-version: '22'
       - run: python3 setup.py --help
-      - name: Resolve through the proxy and pack
+      - name: Install through the proxy and pack
         working-directory: artifact-types/npm/sample
+        env:
+          HARBOR_URL: https://demo.container-registry.com
         run: |
-          npm view left-pad version
+          npm install --no-save --ignore-scripts --loglevel http left-pad 2>&1 | grep -E 'fetch GET 200 .*/npm/npmjs/'
           npm pack --dry-run

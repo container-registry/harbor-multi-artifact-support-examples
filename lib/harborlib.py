@@ -177,6 +177,10 @@ def ensure_issuer(h, name, body, aud):
         die(f"trusted issuer {name} is {issuer.get('issuer')} / aud {issuer.get('audience')} / "
             f"offline={issuer.get('offline_validation')}, expected {want_iss} / aud {aud}. "
             "The audience is immutable; delete it and re-run.")
+    want_cfg = body.get("openid_config_url")
+    if want_cfg and issuer.get("openid_config_url") != want_cfg:
+        die(f"trusted issuer {name} reads {issuer.get('openid_config_url')}, expected {want_cfg}. "
+            "Fix it under Administration -> Trusted Issuers, or delete it and re-run.")
     if body.get("offline_validation"):
         # A recreated cluster signs with new keys; replace the pinned set.
         h.call("PUT", f"/trusted-issuers/{issuer['id']}", {"jwks_keys": body["jwks_keys"]})
@@ -255,11 +259,22 @@ def robot_with_secret(h, name, desc, perms, env_file):
             "duration": -1, "disable": False, "permissions": perms})
         secret = h.call("PATCH", f"/robots/{robot['id']}", {})[1]["secret"]
     path = Path(env_file)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(f"HARBOR_ROBOT_USER='{full_name}'\nHARBOR_ROBOT_SECRET='{secret}'\n")
+    write_secret_file(path, f"HARBOR_ROBOT_USER='{full_name}'\nHARBOR_ROBOT_SECRET='{secret}'\n")
     ok(f"robot {full_name} id={robot['id']}, secret rotated and written to {path.name} (mode 600)")
     return full_name, secret
+
+
+def pkg_url(h, fmt, project):
+    """Package endpoint URL. v2.16.0 serves /<fmt>/; later builds /pkg/<fmt>/ (set PKG_ROOT=/pkg)."""
+    return f"{h.url}{os.environ.get('PKG_ROOT', '')}/{fmt}/{project}"
+
+
+def write_secret_file(path, content):
+    """Write content to path with mode 600, also when the file already exists."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(content)
 
 
 def grant(access, *projects):

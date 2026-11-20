@@ -8,7 +8,7 @@ runs steps 2 to 5 from two entry points:
 | Entry point | Trigger | `publish` | Token becomes |
 |---|---|---|---|
 | [`e2e-todomvc-build.yml`](../../../.github/workflows/e2e-todomvc-build.yml) | `pull_request` | false | `todomvc-ci-pr`, pull only |
-| [`e2e-todomvc-publish.yml`](../../../.github/workflows/e2e-todomvc-publish.yml) | push to `main`, `workflow_dispatch` of `main` | true | `todomvc-ci`, push and pull |
+| [`e2e-todomvc-publish.yml`](../../../.github/workflows/e2e-todomvc-publish.yml) | push to `main` that changes the example, `lib/` or `.github/`, and `workflow_dispatch` of `main` | true | `todomvc-ci`, push and pull |
 
 ```
 maven   resolve via maven-central, verify, deploy jar to todomvc-maven
@@ -128,10 +128,16 @@ resolution source ([2. Maven](03-maven.md#the-client-configuration)):
 
 ## Running it against your own fork
 
-1. Run `./setup.py` with `GITHUB_REPO=<owner>/<repo>`.
+1. Run `./setup.py` against your own instance, with
+   `HARBOR_URL=https://harbor.example.com` and `GITHUB_REPO=<owner>/<repo>`.
+   On a shared instance it would rewrite the claim rules of `todomvc-ci` and
+   `todomvc-ci-pr` to your fork, and the original repository's CI would stop
+   matching.
 2. Change `demo.container-registry.com` in the files listed in the
    [README](../README.md#repository-layout).
-3. Push to `main`.
+3. Push a change under `end-to-end/todomvc-keyless-flux/` to `main`, or run
+   `gh workflow run e2e-todomvc-publish.yml --ref main`. The publish workflow
+   is path-filtered and does not run for unrelated pushes.
 
 ## Next
 

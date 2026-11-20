@@ -109,7 +109,7 @@ From this directory:
 export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...   # your own instance
 export GITHUB_REPO=<owner>/<repo>  # your fork; the CI robots trust only this repository
 ./setup.py                         # projects, trusted issuer, robots
-# push to main, or: gh workflow run e2e-todomvc-publish.yml --ref main
+# push a change under this directory to main, or: gh workflow run e2e-todomvc-publish.yml --ref main
 # build the credential provider first, see docs/08-flux-deploy.md
 kind create cluster --config deploy/kind/kind-config.yaml
 kubectl apply -f deploy/kind/node-audience-rbac.yaml

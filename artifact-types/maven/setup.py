@@ -20,7 +20,7 @@ def provision(h):
     hl.say("Robot that may publish to the hosted project")
     hl.robot_with_secret(h, "example-maven", "Maven example: deploy to example-maven",
                          hl.grant(hl.PUSH, HOSTED), Path(__file__).parent / ".robot.env")
-    print(f"    resolve -> {h.url}/maven/maven-central\n    publish -> {h.url}/maven/{HOSTED}")
+    print(f"    resolve -> {hl.pkg_url(h, 'maven', 'maven-central')}\n    publish -> {hl.pkg_url(h, 'maven', HOSTED)}")
 
 
 if __name__ == "__main__":

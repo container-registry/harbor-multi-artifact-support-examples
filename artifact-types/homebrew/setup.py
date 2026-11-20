@@ -42,11 +42,12 @@ def provision(h):
     user, secret = hl.robot_with_secret(h, "example-brew", "Homebrew example: pull from brew-proxy",
                                         hl.grant(hl.PULL, PROXY), HERE / ".robot.env")
     out = HERE / "brew.env"
-    out.touch(mode=0o600)
-    out.write_text(client_env(h.url, user, secret))
+    hl.write_secret_file(out, client_env(h.url, user, secret))
     hl.ok(f"brew client settings written to {out.name} (mode 600)")
-    req = urllib.request.Request(f"{h.url}/homebrew/{PROXY}/api/formula/jq.json", headers={
-        "Authorization": "Basic " + base64.b64encode(f"{user}:{secret}".encode()).decode()})
+    req = urllib.request.Request(f"{h.url}/homebrew/{PROXY}/api/formula/jq.json")
+    # Unredirected: urllib would otherwise replay the robot credentials to a redirect target.
+    req.add_unredirected_header(
+        "Authorization", "Basic " + base64.b64encode(f"{user}:{secret}".encode()).decode())
     try:
         with urllib.request.urlopen(req) as resp:
             hl.ok(f"robot reads formula metadata through the proxy (jq {json.load(resp)['versions']['stable']})")

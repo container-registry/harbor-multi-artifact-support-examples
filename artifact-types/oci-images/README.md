@@ -16,8 +16,13 @@ does not hold itself, Docker Hub. See
 
 ## Setup
 
+The transcripts on this page ran against the [shared demo](../../docs/shared-demo.md),
+`https://demo.container-registry.com`; against your own instance the host in
+the output is yours. Every command takes the host from `HARBOR_URL`.
+
 ```console
-$ export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...
+$ export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...   # your instance
+$ HOST=${HARBOR_URL#https://}
 $ ./setup.py
 ==> Target: https://demo.container-registry.com
   ok authenticated
@@ -42,26 +47,25 @@ Hub content through it: authorization is checked against the multi-project.
 
 ```console
 $ set -a; . ./.robot.env; set +a
-$ printf '%s' "$HARBOR_ROBOT_SECRET" | docker login demo.container-registry.com -u "$HARBOR_ROBOT_USER" --password-stdin
+$ printf '%s' "$HARBOR_ROBOT_SECRET" | docker login "$HOST" -u "$HARBOR_ROBOT_USER" --password-stdin
 Login Succeeded
-$ docker build -q --build-arg BASE=demo.container-registry.com/example-images/library \
-    -t demo.container-registry.com/example-images/hello:1.0 sample
-sha256:79ac5c0d1cbaf4d0f2a27b1ec0965f2c751651adbadda2b31031356f0cee844f
-$ docker push demo.container-registry.com/example-images/hello:1.0
+$ docker build -q --build-arg BASE="$HOST/example-images/library" -t "$HOST/example-images/hello:1.0" sample
+sha256:6a051d57fcd739883eea95493b571009d212cd5961e4f154652f41b976bc8fcd
+$ docker push "$HOST/example-images/hello:1.0"
 ...
-1.0: digest: sha256:79ac5c0d1cbaf4d0f2a27b1ec0965f2c751651adbadda2b31031356f0cee844f size: 855
-$ docker rmi demo.container-registry.com/example-images/hello:1.0
-$ docker pull demo.container-registry.com/example-images/hello:1.0
+1.0: digest: sha256:6a051d57fcd739883eea95493b571009d212cd5961e4f154652f41b976bc8fcd size: 855
+$ docker rmi "$HOST/example-images/hello:1.0"
+$ docker pull "$HOST/example-images/hello:1.0"
 Status: Downloaded newer image for demo.container-registry.com/example-images/hello:1.0
-$ docker run --rm demo.container-registry.com/example-images/hello:1.0
+$ docker run --rm "$HOST/example-images/hello:1.0"
 hello from example-images
 ```
 
 Without the login the project is closed:
 
 ```console
-$ docker logout demo.container-registry.com
-$ docker pull demo.container-registry.com/example-images/hello:1.0
+$ docker logout "$HOST"
+$ docker pull "$HOST/example-images/hello:1.0"
 Error response from daemon: failed to resolve reference "demo.container-registry.com/example-images/hello:1.0": pull access denied, repository does not exist or may require authorization: authorization failed: no basic auth credentials
 ```
 

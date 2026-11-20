@@ -30,11 +30,18 @@ level list in [README.md](README.md).
 3. **Self-contained**: the example runs with only its own directory, `lib/`
    and `.github/actions/`. No imports from or links into other examples for
    anything needed to run it.
-4. **A workflow** `.github/workflows/<level>-<name>.yml` with `paths:` filters
-   on the example directory, `lib/**` and the workflow itself, so it runs only
-   when they change. A workflow without registry credentials checks what it can
-   offline or anonymously; examples that publish from CI use the keyless token
-   action in `.github/actions/8gcr-token`.
+4. **Workflows** named `<level token>-<name>[-<entry>].yml`, with the level
+   tokens `artifact` for `artifact-types/` and `e2e` for `end-to-end/`. One
+   workflow per example is the default (`artifact-npm.yml`). An example that
+   needs several entry points, such as build on pull requests and publish on
+   `main`, gets one file per entry point plus a reusable
+   `_<level token>-<name>-pipeline.yml` they call (`e2e-todomvc-build.yml`,
+   `e2e-todomvc-publish.yml`, `_e2e-todomvc-pipeline.yml`). Every entry
+   workflow has `paths:` filters on the example directory, `lib/**`, its own
+   workflow files and, if it uses them, `.github/actions/**`, so it runs only
+   when those change. A workflow without registry credentials checks what it
+   can offline or anonymously; examples that publish from CI use the keyless
+   token action in `.github/actions/8gcr-token`.
 5. **Project names** start with `example-` (artifact types) or the example's
    own prefix, so examples do not collide on a shared instance. Proxy-cache
    projects for common upstreams are shared through `harborlib.SHARED_PROXIES`.

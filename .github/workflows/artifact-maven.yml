@@ -30,4 +30,6 @@ jobs:
       - run: python3 setup.py --help
       - name: Build through the proxy
         working-directory: artifact-types/maven/sample
+        env:
+          HARBOR_URL: https://demo.container-registry.com
         run: mvn -B -s .mvn/settings.xml package

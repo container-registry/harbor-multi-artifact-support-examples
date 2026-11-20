@@ -20,7 +20,7 @@ def provision(h):
     hl.say("Robot that may publish to the hosted project")
     hl.robot_with_secret(h, "example-npm", "npm example: publish to example-npm",
                          hl.grant(hl.PUSH, HOSTED), Path(__file__).parent / ".robot.env")
-    print(f"    resolve -> {h.url}/npm/npmjs/\n    publish -> {h.url}/npm/{HOSTED}/")
+    print(f"    resolve -> {hl.pkg_url(h, 'npm', 'npmjs')}/\n    publish -> {hl.pkg_url(h, 'npm', HOSTED)}/")
 
 
 if __name__ == "__main__":

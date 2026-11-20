@@ -8,17 +8,17 @@ material it pushes and pulls. Every transcript was run against
 
 ## Examples
 
-| Example | Level | Artifact types | Keyless | |
+| Example | Level | Artifact types | Keyless | Status |
 |---|---|---|---|---|
-| [TodoMVC, keyless, from source to Flux](end-to-end/todomvc-keyless-flux/README.md) | end to end | Maven, npm, OCI images, Helm | yes: GitHub OIDC, Kubernetes ServiceAccount tokens | |
-| [npm](artifact-types/npm/README.md) | artifact type | npm | no | |
-| [Maven](artifact-types/maven/README.md) | artifact type | Maven | no | |
-| [OCI images](artifact-types/oci-images/README.md) | artifact type | OCI images, Docker Hub proxy via multi-project | no | |
-| [Helm](artifact-types/helm/README.md) | artifact type | Helm charts (OCI) | no | |
-| [Homebrew](artifact-types/homebrew/README.md) | artifact type | Homebrew bottles and metadata (proxy) | no | |
-| PyPI | artifact type | PyPI | | planned |
-| Cargo | artifact type | Cargo | | planned |
-| Go modules | artifact type | Go modules, checksum database | | planned |
+| [TodoMVC, keyless, from source to Flux](end-to-end/todomvc-keyless-flux/README.md) | end to end | Maven, npm, OCI images, Helm | yes: GitHub OIDC, Kubernetes ServiceAccount tokens | available |
+| [npm](artifact-types/npm/README.md) | artifact type | npm | no | available |
+| [Maven](artifact-types/maven/README.md) | artifact type | Maven | no | available |
+| [OCI images](artifact-types/oci-images/README.md) | artifact type | OCI images, Docker Hub proxy via multi-project | no | available |
+| [Helm](artifact-types/helm/README.md) | artifact type | Helm charts (OCI) | no | available |
+| [Homebrew](artifact-types/homebrew/README.md) | artifact type | Homebrew bottles and metadata (proxy) | no | available |
+| PyPI | artifact type | PyPI | n/a | planned |
+| Cargo | artifact type | Cargo | n/a | planned |
+| Go modules | artifact type | Go modules, checksum database | n/a | planned |
 
 **Levels.** An *artifact type* example shows one format on its own: provision,
 push or proxy, pull, clean up. An *end to end* example wires several formats
@@ -39,13 +39,15 @@ docs/                   concepts shared by all examples
 artifact-types/<type>/  one format each: README, sample, setup.py
 end-to-end/<name>/      complete flows: apps, chart, deploy, docs, setup.py
 lib/harborlib.py        provisioning helpers every setup.py imports
-.github/workflows/      one workflow per example, filtered to its directory
+.github/workflows/      per example: entry workflows filtered to its directory, plus
+                        an optional reusable _<prefix>-pipeline.yml they call
 .github/actions/        shared: the GitHub OIDC token action, the version action
 ```
 
 ## Requirements
 
 8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* enabled, and *Federated
-Robot Accounts* for the keyless examples. Setup scripts need Python 3.10+ and
-nothing else, and read `HARBOR_URL`, `HARBOR_USER` (default `admin`) and
-`HARBOR_PASS`.
+Robot Accounts* for the keyless examples. Setup scripts need Python 3.10+ with
+the standard library only, and read `HARBOR_URL`, `HARBOR_USER` (default
+`admin`) and `HARBOR_PASS`. Each example lists its other tools; for instance
+the end-to-end example's `setup.py kind` also calls `kubectl`.

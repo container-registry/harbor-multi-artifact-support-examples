@@ -9,7 +9,7 @@
     <mirror>
       <id>example-proxy</id>
       <mirrorOf>*,!example-hosted</mirrorOf>
-      <url>https://demo.container-registry.com/maven/maven-central</url>
+      <url>${env.HARBOR_URL}/maven/maven-central</url>
     </mirror>
   </mirrors>
   <servers>

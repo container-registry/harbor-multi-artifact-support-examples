@@ -26,8 +26,13 @@ from `github.com`, which is not proxied, so clients turn auto-update off.
 
 ## Setup
 
+The transcripts on this page ran against the [shared demo](../../docs/shared-demo.md),
+`https://demo.container-registry.com`; against your own instance the host in
+the output is yours. Every command takes the host from `HARBOR_URL`.
+
 ```console
-$ export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...
+$ export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...   # your instance
+$ HOST=${HARBOR_URL#https://}
 $ ./setup.py
 ==> Target: https://demo.container-registry.com
   ok authenticated
@@ -54,9 +59,16 @@ $ ./setup.py
 | `HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN=<base64 robot:secret>` | authenticates bottle downloads; the Bearer variant is not accepted |
 | `HOMEBREW_NO_AUTO_UPDATE=1` | stops `brew` from fetching itself from `github.com` |
 
-brew reads `brew.env` itself: install it as `~/.homebrew/brew.env` (per user)
-or `/etc/homebrew/brew.env` (system-wide, readable by the brew users). An
-unreadable file is skipped silently.
+brew reads `brew.env` itself, and skips an unreadable one silently. brew runs
+as the user, so the file must be readable by that user:
+
+```bash
+install -d ~/.homebrew && install -m 0600 brew.env ~/.homebrew/brew.env      # per user
+sudo install -d /etc/homebrew                                                # system-wide:
+sudo install -m 0640 -o root -g <brew-users> brew.env /etc/homebrew/brew.env # group-readable
+```
+
+A root-owned `/etc/homebrew/brew.env` with mode 0600 does not work.
 
 ## Run
 
