@@ -2,7 +2,7 @@
 
 [← The pipeline](06-pipeline.md) · [Homebrew →](../homebrew/README.md)
 
-Everything in this repo also works against a Harbor Next dev environment
+Everything in this repo also works against an 8gcr dev environment
 (`task dev:up` in the harbor repo) on plain HTTP at `localhost:8080` —
 verified end to end with the npm, Maven, and image flows. This page collects
 the local-only differences; the concepts are unchanged from the other docs.
