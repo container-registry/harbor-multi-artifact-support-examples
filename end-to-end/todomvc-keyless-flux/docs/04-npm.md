@@ -38,12 +38,13 @@ The credential belongs to the hosted project only, and in a user config, not in
 the tracked `.npmrc`. npm merges both:
 
 ```bash
+TOKEN="$HARBOR_PASSWORD"                      # the token minted in 2. Maven, or the CI token
 export NPM_CONFIG_USERCONFIG="$(mktemp)"      # or your ~/.npmrc
-echo "//demo.container-registry.com/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" > "$NPM_CONFIG_USERCONFIG"
+echo "//$HOST/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" > "$NPM_CONFIG_USERCONFIG"
 ```
 
 ```console
-$ NPM_CONFIG_USERCONFIG=<file with admin credentials> npm whoami --registry https://demo.container-registry.com/npm/todomvc-npm/
+$ NPM_CONFIG_USERCONFIG=<file with admin credentials> npm whoami --registry $HARBOR_URL/npm/todomvc-npm/
 admin
 ```
 

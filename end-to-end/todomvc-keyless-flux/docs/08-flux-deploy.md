@@ -111,9 +111,9 @@ Quick check that a ServiceAccount token is accepted, before involving Flux:
 
 ```console
 $ kubectl apply -f deploy/flux/namespace.yaml
-$ kubectl -n todomvc create token todomvc --audience demo.container-registry.com \
-    | crane auth login demo.container-registry.com -u jwt --password-stdin
-$ crane digest demo.container-registry.com/todomvc/library/nginx:alpine
+$ kubectl -n todomvc create token todomvc --audience $HOST \
+    | crane auth login $HOST -u jwt --password-stdin
+$ crane digest $HOST/todomvc/library/nginx:alpine
 sha256:fb4658584bd9a916ffb6f6e365f97c25cfdb2923801f551ea08356e695f14ff7
 ```
 
@@ -183,9 +183,9 @@ Same node, same image, `imagePullPolicy: Always`, two ServiceAccounts:
 
 ```console
 $ kubectl -n todomvc create sa other
-$ kubectl -n todomvc run probe-other --image=demo.container-registry.com/todomvc/todo-api:0c68a32... \
+$ kubectl -n todomvc run probe-other --image=$HOST/todomvc/todo-api:0c68a32... \
     --overrides='{"spec":{"serviceAccountName":"other"}}' --image-pull-policy=Always --restart=Never
-$ kubectl -n todomvc run probe-todomvc --image=demo.container-registry.com/todomvc/todo-api:0c68a32... \
+$ kubectl -n todomvc run probe-todomvc --image=$HOST/todomvc/todo-api:0c68a32... \
     --overrides='{"spec":{"serviceAccountName":"todomvc"}}' --image-pull-policy=Always --restart=Never --command -- true
 $ kubectl -n todomvc get pod probe-other probe-todomvc -o custom-columns='N:.metadata.name,P:.status.phase,W:.status.containerStatuses[0].state.waiting.reason,T:.status.containerStatuses[0].state.terminated.reason'
 N               P           W              T
@@ -195,9 +195,23 @@ $ kubectl -n todomvc get pod probe-other -o jsonpath='{.status.containerStatuses
 failed to pull and unpack image "demo.container-registry.com/todomvc/todo-api:0c68a32...": failed to resolve reference ...: unexpected status from HEAD request to https://demo.container-registry.com/v2/todomvc/todo-api/manifests/0c68a32...: 401 Unauthorized
 ```
 
-`other` gets a valid token from the same cluster, but no claim rule maps
-`system:serviceaccount:todomvc:other` to a robot, so Harbor treats it as
-anonymous, and `todomvc` is private.
+This ran with the node grant of [`node-audience-rbac.yaml`](../deploy/kind/node-audience-rbac.yaml)
+covering every ServiceAccount: `other` got a valid token from the same cluster,
+but no claim rule maps `system:serviceaccount:todomvc:other` to a robot, so
+Harbor treated it as anonymous, and `todomvc` is private.
+
+The committed grant is narrower: `resourceNames: ["todomvc"]` lets the kubelet
+mint the registry-audience token for that one account only. Rerun with it,
+`other` now fails one step earlier, in the kubelet, while `todomvc` still pulls:
+
+```console
+$ kubectl -n todomvc get pod p-todomvc p-other -o custom-columns='N:.metadata.name,P:.status.phase,W:.status.containerStatuses[0].state.waiting.reason'
+N           P           W
+p-todomvc   Succeeded   <none>
+p-other     Pending     ImagePullBackOff
+$ journalctl -u kubelet | grep -o 'is not authorized to request tokens[^"]*"[^"]*"'
+is not authorized to request tokens for audience \"demo.container-registry.com\"
+```
 
 An OCIRepository without `serviceAccountName` fails the same way:
 

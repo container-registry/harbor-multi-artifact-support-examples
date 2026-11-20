@@ -157,9 +157,12 @@ jobs:
           IMAGE: ${{ env.OCI_PROJECT }}/${{ matrix.app }}
         run: |
           printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u jwt --password-stdin
-          if docker push "$IMAGE:${{ github.sha }}"; then
+          if out="$(docker push "$IMAGE:${{ github.sha }}" 2>&1)"; then
             echo "::error::a pull_request token was allowed to push"; exit 1
           fi
+          echo "$out"
+          # Any other failure (network, registry down) must not pass as the intended refusal.
+          grep -qiE 'unauthorized|denied' <<<"$out" || { echo "::error::push failed, but not with an authorization refusal"; exit 1; }
           echo "Push with the pull_request token was refused, as intended." >> "$GITHUB_STEP_SUMMARY"
       - name: Push
         if: inputs.publish

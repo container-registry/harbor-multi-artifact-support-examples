@@ -27,9 +27,9 @@ only (here the cluster's ServiceAccount token, see
 [7. Flux deploy](08-flux-deploy.md)):
 
 ```console
-$ kubectl -n todomvc create token todomvc --audience demo.container-registry.com \
-    | crane auth login demo.container-registry.com -u jwt --password-stdin
-$ crane digest demo.container-registry.com/todomvc/library/nginx:alpine
+$ kubectl -n todomvc create token todomvc --audience $HOST \
+    | crane auth login $HOST -u jwt --password-stdin
+$ crane digest $HOST/todomvc/library/nginx:alpine
 sha256:fb4658584bd9a916ffb6f6e365f97c25cfdb2923801f551ea08356e695f14ff7
 ```
 

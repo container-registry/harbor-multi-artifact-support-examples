@@ -88,13 +88,22 @@ curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/
 
 The robot create response carries no secret:
 `{"id":5,"name":"robot$probe-publisher","secret":null}`. This block was rerun
-as written afterwards and created the same claim for robot 6.
+as written afterwards and created the same claim for robot 6. Remove the
+temporary identity when done; deleting the robot also deletes its claim rule:
+
+```bash
+curl -su "admin:$HARBOR_PASS" -X DELETE "$API/robots/$ROBOT_ID"
+kubectl -n todomvc delete sa publisher
+```
+
+Both robots (5 and 6) were deleted this way; afterwards `kind-todomvc` held
+only the claim of `todomvc-k8s`.
 
 The deploy (run while the hosted project was still configured as a
 repository, which only affects resolution):
 
 ```console
-$ export HARBOR_USERNAME=jwt HARBOR_PASSWORD="$(kubectl -n todomvc create token publisher --audience demo.container-registry.com --duration 1h)"
+$ export HARBOR_USERNAME=jwt HARBOR_PASSWORD="$(kubectl -n todomvc create token publisher --audience $HOST --duration 1h)"
 $ mvn -B -q -s .mvn/settings.xml versions:set -DnewVersion=0.0.1-local -DgenerateBackupPoms=false
 $ mvn -B -s .mvn/settings.xml deploy -DskipTests
 ...
@@ -113,7 +122,7 @@ Harbor generates `maven-metadata.xml` from what it holds and serves checksums
 it computes itself:
 
 ```console
-$ curl -s https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/maven-metadata.xml
+$ curl -s $HARBOR_URL/maven/todomvc-maven/com/containerregistry/todo/todo-api/maven-metadata.xml
 <?xml version="1.0" encoding="UTF-8"?>
 <metadata>
   <groupId>com.containerregistry.todo</groupId>
@@ -127,7 +136,7 @@ $ curl -s https://demo.container-registry.com/maven/todomvc-maven/com/containerr
     <lastUpdated>20261120003127</lastUpdated>
   </versioning>
 </metadata>
-$ U=https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.1.13/todo-api-0.1.13.pom
+$ U=$HARBOR_URL/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.1.13/todo-api-0.1.13.pom
 $ curl -s $U.sha1; echo; curl -s $U | shasum -a 1
 97a15e43e50f56af712ddc3e9178fd30d7c32af8
 97a15e43e50f56af712ddc3e9178fd30d7c32af8  -
@@ -143,7 +152,7 @@ repository:
 
 ```console
 $ mvn -B -s .mvn/settings.xml dependency:get -Dtransitive=false \
-    -DremoteRepositories=8gcr-hosted::default::https://demo.container-registry.com/maven/todomvc-maven \
+    -DremoteRepositories=8gcr-hosted::default::$HARBOR_URL/maven/todomvc-maven \
     -Dartifact=com.containerregistry.todo:todo-api:0.0.1-local
 [INFO] Downloaded from 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.0.1-local/todo-api-0.0.1-local.pom (2.0 kB at 2.2 kB/s)
 [INFO] Downloaded from 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.0.1-local/todo-api-0.0.1-local.jar (54 MB at 13 MB/s)

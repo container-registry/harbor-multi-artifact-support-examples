@@ -8,11 +8,13 @@ create, so it is safe to rerun.
 
 ## Requirements
 
+Transcripts and `HOST` are explained under [Run the setup script](#run-the-setup-script).
+
 8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* and *Federated Robot
 Accounts* enabled:
 
 ```console
-$ curl -s -u "admin:$HARBOR_PASS" https://demo.container-registry.com/api/v2.0/features \
+$ curl -s -u "admin:$HARBOR_PASS" $HARBOR_URL/api/v2.0/features \
     | jq -r '.features[] | select(.section=="commercial" and .enabled) | .key'
 enable_commercial_branding
 enable_commercial_federated_robot_accounts
@@ -22,8 +24,15 @@ enable_commercial_pgx_monitoring
 
 ## Run the setup script
 
+Run it against your own instance. On a shared one it would rewrite the claim
+rules of `todomvc-ci` and `todomvc-ci-pr` to your repository. The transcripts
+on these pages ran against the [shared demo](../../../docs/shared-demo.md),
+`https://demo.container-registry.com`; with your own instance the host in the
+output is yours. Commands use `HARBOR_URL` and `HOST=${HARBOR_URL#https://}`.
+
 ```console
-$ export HARBOR_URL=https://demo.container-registry.com HARBOR_PASS=...
+$ export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...   # your instance
+$ HOST=${HARBOR_URL#https://}
 $ export API=$HARBOR_URL/api/v2.0      # used by the curl examples below
 $ ./setup.py
 
@@ -126,7 +135,7 @@ follows its key rotation.
 
 ```bash
 curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/trusted-issuers" \
-  -d '{"name":"github-actions","audience":"demo.container-registry.com","offline_validation":false,
+  -d '{"name":"github-actions","audience":"harbor.example.com","offline_validation":false,
        "openid_config_url":"https://token.actions.githubusercontent.com/.well-known/openid-configuration"}'
 ```
 
@@ -158,12 +167,12 @@ and `iss` are rejected as claim rules because they belong to the issuer.
 ## Check it
 
 ```console
-$ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' https://demo.container-registry.com/npm/npmjs/vue
+$ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $HARBOR_URL/npm/npmjs/vue
 200 application/json
 $ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
-    https://demo.container-registry.com/maven/maven-central/junit/junit/4.13.2/junit-4.13.2.pom
+    $HARBOR_URL/maven/maven-central/junit/junit/4.13.2/junit-4.13.2.pom
 200 text/xml
-$ crane manifest demo.container-registry.com/todomvc/library/nginx:alpine
+$ crane manifest $HOST/todomvc/library/nginx:alpine
 Error: fetching manifest ...: UNAUTHORIZED: unauthorized to access repository: todomvc/library/nginx, action: pull
 ```
 

@@ -40,11 +40,12 @@ $ ./setup.py
 
 ```console
 $ set -a; . ./.robot.env; set +a
-$ helm package sample -d "$(mktemp -d)"
+$ OUT="$(mktemp -d)"
+$ helm package sample -d "$OUT"
 Successfully packaged chart and saved it to: /tmp/.../hello-0.1.0.tgz
 $ printf '%s' "$HARBOR_ROBOT_SECRET" | helm registry login "$HOST" -u "$HARBOR_ROBOT_USER" --password-stdin
 Login Succeeded
-$ helm push /tmp/.../hello-0.1.0.tgz "oci://$HOST/example-helm"
+$ helm push "$OUT/hello-0.1.0.tgz" "oci://$HOST/example-helm"
 Pushed: demo.container-registry.com/example-helm/hello:0.1.0
 Digest: sha256:9d3c9810c520fab0e76c6f752d9cbfcd98cb343214bfc6e2020721d704097863
 $ helm template t "oci://$HOST/example-helm/hello" --version 0.1.0

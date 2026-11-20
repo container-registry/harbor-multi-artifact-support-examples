@@ -57,9 +57,9 @@ own tags, not those of its sub-projects. Measured with a pull token for
 `todomvc`:
 
 ```console
-$ curl -H "Authorization: Bearer $T" https://demo.container-registry.com/v2/todomvc/charts/todomvc/tags/list
+$ curl -H "Authorization: Bearer $T" $HARBOR_URL/v2/todomvc/charts/todomvc/tags/list
 {"name":"todomvc/charts/todomvc","tags":["0.1.12","0.1.13"]}
-$ curl -H "Authorization: Bearer $T" https://demo.container-registry.com/v2/todomvc/library/nginx/tags/list
+$ curl -H "Authorization: Bearer $T" $HARBOR_URL/v2/todomvc/library/nginx/tags/list
 {"errors":[{"code":"NOT_FOUND","message":"repository todomvc/library/nginx not found"}]}
 ```
 
@@ -84,9 +84,9 @@ $ curl -s -u "admin:$PASS" -X POST "$API/projects" -H 'Content-Type: application
 $ curl -s -u "admin:$PASS" -X POST "$API/projects/probe-multi-npm/subprojects" -H 'Content-Type: application/json' \
     -d '{"sub_project_name":"npmjs","rank":1}' -w '%{http_code}\n'
 201
-$ curl -s -w ' %{http_code}\n' https://demo.container-registry.com/npm/probe-multi-npm/vue
+$ curl -s -w ' %{http_code}\n' $HARBOR_URL/npm/probe-multi-npm/vue
 {"error":"package not found"} 404
-$ curl -s -o /dev/null -w '%{http_code}\n' https://demo.container-registry.com/npm/npmjs/vue
+$ curl -s -o /dev/null -w '%{http_code}\n' $HARBOR_URL/npm/npmjs/vue
 200
 ```
 

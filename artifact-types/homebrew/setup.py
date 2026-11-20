@@ -19,12 +19,13 @@ PROXY = "brew-proxy"
 HERE = Path(__file__).parent
 
 
-def client_env(url, user, secret):
-    parts = urllib.parse.urlsplit(url)
+def client_env(h, user, secret):
+    parts = urllib.parse.urlsplit(h.url)
     enc = lambda s: urllib.parse.quote(s, safe="")  # noqa: E731
-    base = f"{parts.scheme}://{parts.netloc}/homebrew/{PROXY}"
+    path = urllib.parse.urlsplit(hl.pkg_url(h, "homebrew", PROXY)).path
+    base = f"{parts.scheme}://{parts.netloc}{path}"
     # brew sends no credentials to HOMEBREW_API_DOMAIN, so they ride in the URL.
-    api = f"{parts.scheme}://{enc(user)}:{enc(secret)}@{parts.netloc}/homebrew/{PROXY}/api"
+    api = f"{parts.scheme}://{enc(user)}:{enc(secret)}@{parts.netloc}{path}/api"
     token = base64.b64encode(f"{user}:{secret}".encode()).decode()
     return (f"HOMEBREW_API_DOMAIN={api}\n"
             f"HOMEBREW_ARTIFACT_DOMAIN={base}\n"
@@ -42,9 +43,9 @@ def provision(h):
     user, secret = hl.robot_with_secret(h, "example-brew", "Homebrew example: pull from brew-proxy",
                                         hl.grant(hl.PULL, PROXY), HERE / ".robot.env")
     out = HERE / "brew.env"
-    hl.write_secret_file(out, client_env(h.url, user, secret))
+    hl.write_secret_file(out, client_env(h, user, secret))
     hl.ok(f"brew client settings written to {out.name} (mode 600)")
-    req = urllib.request.Request(f"{h.url}/homebrew/{PROXY}/api/formula/jq.json")
+    req = urllib.request.Request(f"{hl.pkg_url(h, 'homebrew', PROXY)}/api/formula/jq.json")
     # Unredirected: urllib would otherwise replay the robot credentials to a redirect target.
     req.add_unredirected_header(
         "Authorization", "Basic " + base64.b64encode(f"{user}:{secret}".encode()).decode())

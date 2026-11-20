@@ -51,10 +51,10 @@ So every job mints a second token right before it pushes. How each client
 takes the token:
 
 ```bash
-printf '%s' "$TOKEN" | docker login demo.container-registry.com -u jwt --password-stdin
-printf '%s' "$TOKEN" | helm registry login demo.container-registry.com -u jwt --password-stdin
+printf '%s' "$TOKEN" | docker login $HOST -u jwt --password-stdin
+printf '%s' "$TOKEN" | helm registry login $HOST -u jwt --password-stdin
 export NPM_CONFIG_USERCONFIG="$(mktemp)"
-echo "//demo.container-registry.com/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" > "$NPM_CONFIG_USERCONFIG"
+echo "//$HOST/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" > "$NPM_CONFIG_USERCONFIG"
 HARBOR_USERNAME=jwt HARBOR_PASSWORD="$TOKEN" mvn -s .mvn/settings.xml deploy
 ```
 

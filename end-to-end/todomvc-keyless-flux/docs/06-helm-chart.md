@@ -14,7 +14,8 @@ The image tag defaults to `appVersion`, so a chart always deploys the images
 built from the same commit:
 
 ```bash
-helm package chart/todomvc --version 0.1.13 --app-version "$GITHUB_SHA"
+VERSION=0.1.13      # CI: 0.1.<run_number>, see 6. Pipeline
+helm package chart/todomvc --version "$VERSION" --app-version "$GITHUB_SHA"
 ```
 
 The committed `appVersion` is `unset`, and rendering without a tag fails
@@ -30,8 +31,8 @@ Error: execution error at (todomvc/templates/ui.yaml:18:20): no image tag: set i
 The chart goes into the same multi-project as the images:
 
 ```bash
-printf '%s' "$TOKEN" | helm registry login demo.container-registry.com -u jwt --password-stdin
-helm push todomvc-0.1.13.tgz oci://demo.container-registry.com/todomvc/charts
+printf '%s' "$TOKEN" | helm registry login $HOST -u jwt --password-stdin
+helm push "todomvc-$VERSION.tgz" "oci://$HOST/todomvc/charts"
 ```
 
 ```console

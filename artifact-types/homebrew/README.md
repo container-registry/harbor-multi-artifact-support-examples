@@ -23,6 +23,7 @@ from `github.com`, which is not proxied, so clients turn auto-update off.
 
 - 8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* enabled, admin credentials
 - Homebrew 4.x on the client (ran with 4.6.20 in `homebrew/ubuntu24.04`), Python 3.10+
+- On 8gcr builds newer than v2.16.0, the path is `/pkg/homebrew/` instead of `/homebrew/`: run `setup.py` with `PKG_ROOT=/pkg`.
 
 ## Setup
 

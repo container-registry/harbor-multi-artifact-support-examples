@@ -19,7 +19,11 @@ level list in [README.md](README.md).
    - a title, then one line: `**Level:** ... · **Artifact types:** ... · **Keyless:** yes|no`
    - a link back to the catalogue
    - **Prerequisites**: 8gcr version and features, tools with versions
-   - **Setup**: the setup command and its real output
+   - **Setup**: first a line saying the setup must run against your own
+     instance (`HARBOR_URL` set to it), what it would overwrite on a shared
+     one, and that the transcripts ran against the shared demo so the host in
+     the output is yours on your own instance; then the setup command and its
+     real output. Commands take the host from `HARBOR_URL`.
    - **Run**: the commands and their real, trimmed output
    - **Cleanup**: what to delete in Harbor and locally
 2. **`setup.py`**: Python 3, standard library only, idempotent, configured
