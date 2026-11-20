@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Provision everything the TodoMVC example needs on an 8gcr / Harbor Next 2.16 instance.
+"""Provision everything the TodoMVC example needs on an 8gcr 2.16 instance.
 
   setup.py        registry side and keyless CI (idempotent)
   setup.py kind   trust the current kind cluster (run after every `kind create cluster`)

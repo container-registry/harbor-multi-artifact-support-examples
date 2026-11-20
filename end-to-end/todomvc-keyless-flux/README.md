@@ -4,8 +4,8 @@
 
 [← Example catalogue](../../README.md)
 
-The complete, runnable example of [8gcr](https://container-registry.com/8gcr)
-(Harbor Next 2.16) as the only artifact store of a project, run against
+The complete, runnable example of [8gears Container Registry (8gcr)](https://container-registry.com/8gcr)
+2.16 as the only artifact store of a project, run against
 `https://demo.container-registry.com`. A Java/Maven backend and
 an npm frontend are built in GitHub Actions, packaged as container images and a
 Helm chart, and deployed by Flux to a Kubernetes cluster. Every dependency comes
@@ -65,7 +65,7 @@ has the reasons and the evidence.
 
 ## Prerequisites
 
-- 8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* and *Federated Robot Accounts* enabled, and admin credentials
+- 8gcr 2.16 with *Multi-Format Artifacts* and *Federated Robot Accounts* enabled, and admin credentials
 - a fork of this repository with GitHub Actions enabled
 - Docker, kind 0.33+, kubectl, Python 3.10+
 - for local builds: JDK 21 and Maven 3.9, Node 22

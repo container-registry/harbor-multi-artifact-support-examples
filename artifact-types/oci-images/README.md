@@ -11,7 +11,7 @@ does not hold itself, Docker Hub. See
 
 ## Prerequisites
 
-- 8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* enabled (multi-projects are part of it), admin credentials
+- 8gcr 2.16 with *Multi-Format Artifacts* enabled (multi-projects are part of it), admin credentials
 - Docker, Python 3.10+
 
 ## Setup

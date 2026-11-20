@@ -10,7 +10,7 @@ A Helm chart is an OCI artifact, so it goes into an ordinary hosted project:
 
 ## Prerequisites
 
-- 8gcr / Harbor Next 2.16, admin credentials
+- 8gcr 2.16, admin credentials
 - Helm 3.8+ (ran with v4.3.1), Python 3.10+
 
 ## Setup

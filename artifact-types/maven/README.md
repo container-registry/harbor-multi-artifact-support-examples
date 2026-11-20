@@ -10,7 +10,7 @@ See [docs/concepts.md](../../docs/concepts.md) for why the two are separate.
 
 ## Prerequisites
 
-- 8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* enabled, admin credentials
+- 8gcr 2.16 with *Multi-Format Artifacts* enabled, admin credentials
 - Maven 3.9 with a JDK 17+, or Docker (the commands below ran in `maven:3.9-eclipse-temurin-21`), Python 3.10+
 - On 8gcr builds newer than v2.16.0, package paths are `/pkg/maven/` instead of `/maven/`: edit `settings.xml` and `pom.xml`, and run `setup.py` with `PKG_ROOT=/pkg`.
 

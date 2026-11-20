@@ -10,7 +10,7 @@ create, so it is safe to rerun.
 
 Transcripts and `HOST` are explained under [Run the setup script](#run-the-setup-script).
 
-8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* and *Federated Robot
+8gcr 2.16 with *Multi-Format Artifacts* and *Federated Robot
 Accounts* enabled:
 
 ```console

@@ -1,7 +1,7 @@
 # 8gcr examples: one registry for every artifact type
 
-Runnable examples for [8gcr](https://container-registry.com/8gcr) (Harbor Next
-2.16) as the registry for containers, Helm charts and language packages. Each
+Runnable examples for [8gears Container Registry (8gcr)](https://container-registry.com/8gcr)
+2.16 as the registry for containers, Helm charts and language packages. Each
 example lives in its own directory with a README, a setup script and the
 material it pushes and pulls. Every transcript was run against
 `https://demo.container-registry.com`, a [shared public demo](docs/shared-demo.md).
@@ -46,7 +46,7 @@ lib/harborlib.py        provisioning helpers every setup.py imports
 
 ## Requirements
 
-8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* enabled, and *Federated
+8gcr 2.16 with *Multi-Format Artifacts* enabled, and *Federated
 Robot Accounts* for the keyless examples. Setup scripts need Python 3.10+ with
 the standard library only, and read `HARBOR_URL`, `HARBOR_USER` (default
 `admin`) and `HARBOR_PASS`. Each example lists its other tools; for instance
