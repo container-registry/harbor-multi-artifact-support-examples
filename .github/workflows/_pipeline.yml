@@ -86,24 +86,27 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
-      - id: auth
-        uses: ./.github/actions/8gcr-token
-        with:
-          audience: ${{ env.REGISTRY }}
-      - name: Authenticate npm
-        env:
-          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
-        run: |
-          # Harbor reads HTTP Basic from _auth; _authToken is not accepted.
-          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
-          echo "::add-mask::$auth"
-          echo "//${NPM_HOSTED#https://}:_auth=$auth" >> .npmrc
+      # Both projects in .npmrc are public, so installing needs no credential.
       - name: Install through the npmjs proxy cache
         run: npm ci
       - run: npm run build
+      # Minted after the build: the token is valid for 5 minutes.
+      - id: auth
+        if: inputs.publish
+        uses: ./.github/actions/8gcr-token
+        with:
+          audience: ${{ env.REGISTRY }}
       - name: Publish the package
         if: inputs.publish
+        env:
+          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
+          # Harbor reads HTTP Basic from _auth; _authToken is not accepted. The credential
+          # goes into a user config outside the checkout, not into the tracked .npmrc.
+          auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
+          echo "::add-mask::$auth"
+          export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/npmrc"
+          echo "//${NPM_HOSTED#https://}:_auth=$auth" > "$NPM_CONFIG_USERCONFIG"
           npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
           npm publish
           echo "Published \`@todomvc/todo-ui@${{ steps.version.outputs.version }}\` to $NPM_HOSTED" >> "$GITHUB_STEP_SUMMARY"

@@ -42,10 +42,22 @@ public.
 
 ## Build and push
 
-The `images` job of [the pipeline](07-pipeline.md) builds with
-`docker/build-push-action` and pushes afterwards with a fresh token:
+The `images` job of [`_pipeline.yml`](../.github/workflows/_pipeline.yml),
+shortened. The login comes before the build, because the build pulls base
+images from the private `todomvc`; the push mints a fresh token and runs only
+when publishing:
 
 ```yaml
+- id: auth
+  uses: ./.github/actions/8gcr-token
+  with:
+    audience: ${{ env.REGISTRY }}
+- name: Log in to the registry
+  env:
+    HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
+    HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+  run: printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u "$HARBOR_USERNAME" --password-stdin
+- uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
   with:
     context: apps/${{ matrix.app }}
@@ -55,7 +67,16 @@ The `images` job of [the pipeline](07-pipeline.md) builds with
     tags: |
       ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
       ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ steps.version.outputs.version }}
-- run: |
+- id: auth-publish
+  uses: ./.github/actions/8gcr-token
+  with:
+    audience: ${{ env.REGISTRY }}
+- name: Push
+  if: inputs.publish
+  env:
+    HARBOR_PASSWORD: ${{ steps.auth-publish.outputs.password }}
+    IMAGE: ${{ env.OCI_PROJECT }}/${{ matrix.app }}
+  run: |
     printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u jwt --password-stdin
     docker push --all-tags "$IMAGE"
 ```

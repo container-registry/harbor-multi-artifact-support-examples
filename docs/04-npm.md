@@ -34,16 +34,24 @@ All 36 packages came through the proxy.
 ## Publish, keyless
 
 Harbor reads HTTP Basic from `_auth`; `_authToken` (Bearer) is not accepted.
-The credential is appended for the hosted project only:
+The credential belongs to the hosted project only, and in a user config, not in
+the tracked `.npmrc`. npm merges both:
 
 ```bash
-echo "//demo.container-registry.com/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" >> .npmrc
+export NPM_CONFIG_USERCONFIG="$(mktemp)"      # or your ~/.npmrc
+echo "//demo.container-registry.com/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" > "$NPM_CONFIG_USERCONFIG"
+```
+
+```console
+$ NPM_CONFIG_USERCONFIG=<file with admin credentials> npm whoami --registry https://demo.container-registry.com/npm/todomvc-npm/
+admin
 ```
 
 In CI `$TOKEN` is the GitHub OIDC token ([6. Pipeline](07-pipeline.md)). This
-run used a ServiceAccount token from the kind cluster of
-[7. Flux deploy](08-flux-deploy.md), mapped to a temporary robot with push on
-`todomvc-npm`:
+run used the token of the temporary `publisher` ServiceAccount described in
+[2. Maven](03-maven.md#build-and-deploy-keyless), whose robot also had push on
+`todomvc-npm`. (That run appended the credential to the project `.npmrc` and
+restored the file afterwards; the user config above is the safer place.)
 
 ```console
 $ npm run build

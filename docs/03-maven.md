@@ -44,10 +44,11 @@ and in [`pom.xml`](../apps/todo-api/pom.xml):
 </distributionManagement>
 ```
 
-- `mirrorOf *` rather than `central`: a `<repositories>` block only redirects
-  dependencies, while plugins keep coming from the built-in plugin repository.
-  The wildcard catches both. `!8gcr-hosted` exempts the hosted repository, so
-  the jar this project publishes can be resolved from where it was deployed.
+- `mirrorOf *` rather than `central`: `central` covers the built-in
+  repository for dependencies and plugins, but not repositories that
+  third-party POMs declare themselves. The wildcard sends those through the
+  proxy too. `!8gcr-hosted` exempts the hosted repository, so the jar this
+  project publishes can be resolved from where it was deployed.
 - One id, `8gcr-hosted`, ties the repository, `distributionManagement` and the
   `<server>` credentials together.
 - Neither project needs a credential to read: both are public, and Maven only
@@ -61,11 +62,25 @@ A build that never consumes artifacts from the hosted project can drop the
 ## Build and deploy, keyless
 
 The token is the password, user `jwt`. In CI that is the GitHub OIDC token
-([6. Pipeline](07-pipeline.md)). This run used a Kubernetes ServiceAccount token
-from the kind cluster of [7. Flux deploy](08-flux-deploy.md), mapped by a claim
-rule to a temporary robot with push on `todomvc-maven`, to show the same
-mechanism from a workstation. Cold local repository, inside
-`maven:3.9-eclipse-temurin-21`:
+([6. Pipeline](07-pipeline.md)). To show the same mechanism from a workstation,
+this run used a token of a ServiceAccount `publisher` in the kind cluster of
+[7. Flux deploy](08-flux-deploy.md), which the setup script does not create.
+It was set up for this run and removed afterwards (trusted issuer 2 is
+`kind-todomvc`):
+
+```bash
+kubectl -n todomvc create sa publisher
+curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/robots" -d '{
+  "name":"probe-publisher","level":"system","duration":-1,"trusted_issuer_id":2,
+  "permissions":[{"kind":"project","namespace":"todomvc-maven","access":[
+      {"resource":"repository","action":"push"},{"resource":"repository","action":"pull"},
+      {"resource":"artifact","action":"read"},{"resource":"tag","action":"create"}]},
+    {"kind":"project","namespace":"todomvc-npm","access":[...same...]}]}'
+curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/trusted-issuers/2/claims" \
+  -d '{"rules":[{"robot_id":5,"claim_path":"sub","value":"system:serviceaccount:todomvc:publisher"}]}'
+```
+
+Cold local repository, inside `maven:3.9-eclipse-temurin-21`:
 
 ```console
 $ export HARBOR_USERNAME=jwt HARBOR_PASSWORD="$(kubectl -n todomvc create token publisher --audience demo.container-registry.com --duration 1h)"

@@ -53,7 +53,7 @@ takes the token:
 ```bash
 printf '%s' "$TOKEN" | docker login demo.container-registry.com -u jwt --password-stdin
 printf '%s' "$TOKEN" | helm registry login demo.container-registry.com -u jwt --password-stdin
-echo "//demo.container-registry.com/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" >> .npmrc
+echo "//demo.container-registry.com/npm/todomvc-npm/:_auth=$(printf 'jwt:%s' "$TOKEN" | base64 | tr -d '\n')" > "$NPM_CONFIG_USERCONFIG"
 HARBOR_USERNAME=jwt HARBOR_PASSWORD="$TOKEN" mvn -s .mvn/settings.xml deploy
 ```
 
@@ -113,6 +113,12 @@ up demo:
 | chart | 13 s | |
 | verify | 2 min 58 s | `dependency:get` 2:24 |
 | whole run | 9 min 20 s | |
+
+The pull request run 44653689841 on the current layout (hosted repository
+listed in `settings.xml`) took longer for Maven: `versions:set` 3:49 and
+`verify` 4:49 for a 9 min 2 s job, with 273 lookups against `8gcr-hosted`
+that end in 404 before the mirror is asked. The Maven build inside the
+`todo-api` image took 5:49.
 
 The Maven numbers are dominated by the proxy cache going upstream for files it
 dropped instead of storing ([2. Maven](03-maven.md#the-proxy-cache-fills-less-than-it-serves)).
