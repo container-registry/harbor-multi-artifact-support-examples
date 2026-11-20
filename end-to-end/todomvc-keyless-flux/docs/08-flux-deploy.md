@@ -62,7 +62,7 @@ clusterrole.rbac.authorization.k8s.io/harbor-registry-audience created
 clusterrolebinding.rbac.authorization.k8s.io/harbor-registry-audience created
 ```
 
-Run these from the repository root; the kind config mounts the binary and
+Run these from `end-to-end/todomvc-keyless-flux`; the kind config mounts the binary and
 [`credential-provider-config.yaml`](../deploy/kind/credential-provider-config.yaml)
 into the node by relative path. Cluster creation took 13 s.
 
@@ -83,7 +83,7 @@ issuer is created in offline mode with the cluster's signing keys pinned. The
 pinned key, together with the audience, is what makes it *this* cluster.
 
 ```console
-$ ./scripts/setup-8gcr.py kind
+$ ./setup.py kind
 
 ==> Target: https://demo.container-registry.com (audience: demo.container-registry.com)
   ok authenticated

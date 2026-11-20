@@ -5,11 +5,17 @@
 # to the push robot, so a token minted anywhere else cannot push even if a workflow
 # file on a branch drops this condition.
 
-name: publish
+name: e2e-todomvc publish
 
 on:
   push:
     branches: [main]
+    paths:
+      - end-to-end/todomvc-keyless-flux/**
+      - lib/**
+      - .github/actions/**
+      - .github/workflows/e2e-todomvc-*.yml
+      - .github/workflows/_e2e-todomvc-pipeline.yml
   workflow_dispatch:
 
 permissions:
@@ -18,7 +24,7 @@ permissions:
 jobs:
   pipeline:
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/_pipeline.yml
+    uses: ./.github/workflows/_e2e-todomvc-pipeline.yml
     permissions:
       contents: read
       id-token: write

@@ -1,0 +1,33 @@
+# Checks the Maven example without credentials: the setup script compiles and the
+# sample builds with every dependency and plugin resolved through the public
+# maven-central proxy. Deploying needs a robot secret and is part of the walkthrough.
+name: artifact maven
+
+on:
+  pull_request:
+    paths: [artifact-types/maven/**, lib/**, .github/workflows/artifact-maven.yml]
+  push:
+    branches: [main]
+    paths: [artifact-types/maven/**, lib/**, .github/workflows/artifact-maven.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artifact-types/maven
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          java-version: '21'
+          distribution: temurin
+      - run: python3 setup.py --help
+      - name: Build through the proxy
+        working-directory: artifact-types/maven/sample
+        run: mvn -B -s .mvn/settings.xml package

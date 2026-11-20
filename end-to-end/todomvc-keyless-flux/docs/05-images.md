@@ -42,7 +42,7 @@ public.
 
 ## Build and push
 
-The `images` job of [`_pipeline.yml`](../.github/workflows/_pipeline.yml),
+The `images` job of [`_e2e-todomvc-pipeline.yml`](../../../.github/workflows/_e2e-todomvc-pipeline.yml),
 shortened. The login comes before the build, because the build pulls base
 images from the private `todomvc`; the push mints a fresh token and runs only
 when publishing:

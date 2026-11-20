@@ -6,17 +6,23 @@
 # registry, not a step condition in this file. Pull requests from forks get no
 # OIDC token from GitHub at all, so their auth step fails.
 
-name: build
+name: e2e-todomvc build
 
 on:
   pull_request:
+    paths:
+      - end-to-end/todomvc-keyless-flux/**
+      - lib/**
+      - .github/actions/**
+      - .github/workflows/e2e-todomvc-*.yml
+      - .github/workflows/_e2e-todomvc-pipeline.yml
 
 permissions:
   contents: read
 
 jobs:
   pipeline:
-    uses: ./.github/workflows/_pipeline.yml
+    uses: ./.github/workflows/_e2e-todomvc-pipeline.yml
     permissions:
       contents: read
       id-token: write

@@ -2,13 +2,13 @@
 
 [← 5. Helm chart](06-helm-chart.md) · [7. Flux deploy →](08-flux-deploy.md)
 
-One reusable workflow, [`_pipeline.yml`](../.github/workflows/_pipeline.yml),
+One reusable workflow, [`_e2e-todomvc-pipeline.yml`](../../../.github/workflows/_e2e-todomvc-pipeline.yml),
 runs steps 2 to 5 from two entry points:
 
 | Entry point | Trigger | `publish` | Token becomes |
 |---|---|---|---|
-| [`build.yml`](../.github/workflows/build.yml) | `pull_request` | false | `todomvc-ci-pr`, pull only |
-| [`publish.yml`](../.github/workflows/publish.yml) | push to `main`, `workflow_dispatch` of `main` | true | `todomvc-ci`, push and pull |
+| [`e2e-todomvc-build.yml`](../../../.github/workflows/e2e-todomvc-build.yml) | `pull_request` | false | `todomvc-ci-pr`, pull only |
+| [`e2e-todomvc-publish.yml`](../../../.github/workflows/e2e-todomvc-publish.yml) | push to `main`, `workflow_dispatch` of `main` | true | `todomvc-ci`, push and pull |
 
 ```
 maven   resolve via maven-central, verify, deploy jar to todomvc-maven
@@ -24,13 +24,13 @@ Both entry points grant `id-token: write`. The boundary that matters is in
 Harbor's claim rules ([1. Setup](02-setup.md#secretless-robots-and-claim-rules)):
 only a token whose `ref` is `refs/heads/main` maps to the robot that can push,
 and a `pull_request` token maps to the one that can only pull, whatever the
-pull request's build code does with it. `publish.yml` also skips its job on any
+pull request's build code does with it. `e2e-todomvc-publish.yml` also skips its job on any
 ref but `main`. Pull requests from forks get no OIDC token from GitHub, so
 their runs fail at the auth step.
 
 ## The token
 
-[`.github/actions/8gcr-token`](../.github/actions/8gcr-token/action.yml) asks
+[`.github/actions/8gcr-token`](../../../.github/actions/8gcr-token/action.yml) asks
 GitHub for an OIDC token with the registry host as audience, masks it, and
 returns it as the password. There is no exchange step: Harbor validates the
 token itself. The action logs the claims that matter:
@@ -62,7 +62,7 @@ HARBOR_USERNAME=jwt HARBOR_PASSWORD="$TOKEN" mvn -s .mvn/settings.xml deploy
 
 Each publishing job computes its version, `0.1.<run_number>` with
 `-rc<attempt>` on a rerun, with
-[`.github/actions/version`](../.github/actions/version/action.yml). Release
+[`.github/actions/version`](../../../.github/actions/version/action.yml). Release
 versions are immutable, and "Re-run failed jobs" does not rerun jobs that
 succeeded, so a shared version job would hand a rerun the old value. `verify`
 reads each job's version from its outputs.
@@ -128,7 +128,7 @@ resolution source ([2. Maven](03-maven.md#the-client-configuration)):
 
 ## Running it against your own fork
 
-1. Run `./scripts/setup-8gcr.py` with `GITHUB_REPO=<owner>/<repo>`.
+1. Run `./setup.py` with `GITHUB_REPO=<owner>/<repo>`.
 2. Change `demo.container-registry.com` in the files listed in the
    [README](../README.md#repository-layout).
 3. Push to `main`.

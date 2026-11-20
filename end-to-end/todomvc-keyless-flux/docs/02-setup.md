@@ -2,7 +2,7 @@
 
 [← Concepts](01-concepts.md) · [2. Maven →](03-maven.md)
 
-[`scripts/setup-8gcr.py`](../scripts/setup-8gcr.py) is the only provisioning
+[`setup.py`](../setup.py) is the only provisioning
 step. It is idempotent and checks every existing object against what it would
 create, so it is safe to rerun.
 
@@ -25,7 +25,7 @@ enable_commercial_pgx_monitoring
 ```console
 $ export HARBOR_URL=https://demo.container-registry.com HARBOR_PASS=...
 $ export API=$HARBOR_URL/api/v2.0      # used by the curl examples below
-$ ./scripts/setup-8gcr.py
+$ ./setup.py
 
 ==> Target: https://demo.container-registry.com (audience: demo.container-registry.com)
   ok authenticated
@@ -130,7 +130,7 @@ curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/
        "openid_config_url":"https://token.actions.githubusercontent.com/.well-known/openid-configuration"}'
 ```
 
-The Kubernetes trusted issuer is created by `setup-8gcr.py kind`, see
+The Kubernetes trusted issuer is created by `setup.py kind`, see
 [7. Flux deploy](08-flux-deploy.md#trust-the-cluster-in-harbor).
 
 ### Secretless robots and claim rules

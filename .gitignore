@@ -25,3 +25,5 @@ brew.env
 
 # Python bytecode from running the scripts
 __pycache__/
+.robot.env
+brew.env

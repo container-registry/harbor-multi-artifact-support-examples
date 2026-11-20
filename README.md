@@ -1,134 +1,51 @@
-# One registry, keyless, from source to cluster
+# 8gcr examples: one registry for every artifact type
 
-The complete, runnable example of [8gcr](https://container-registry.com/8gcr)
-(Harbor Next 2.16) as the only artifact store of a project, run against
-`https://demo.container-registry.com`. A Java/Maven backend and
-an npm frontend are built in GitHub Actions, packaged as container images and a
-Helm chart, and deployed by Flux to a Kubernetes cluster. Every dependency comes
-through Harbor, every artifact goes into Harbor, and no registry secret is
-stored anywhere.
+Runnable examples for [8gcr](https://container-registry.com/8gcr) (Harbor Next
+2.16) as the registry for containers, Helm charts and language packages. Each
+example lives in its own directory with a README, a setup script and the
+material it pushes and pulls. Every transcript was run against
+`https://demo.container-registry.com`, a [shared public demo](docs/shared-demo.md).
 
-The TodoMVC apps in `apps/` only exist to give the flow something real to build.
+## Examples
 
-## The flow
+| Example | Level | Artifact types | Keyless | |
+|---|---|---|---|---|
+| [TodoMVC, keyless, from source to Flux](end-to-end/todomvc-keyless-flux/README.md) | end to end | Maven, npm, OCI images, Helm | yes: GitHub OIDC, Kubernetes ServiceAccount tokens | |
+| [npm](artifact-types/npm/README.md) | artifact type | npm | no | |
+| [Maven](artifact-types/maven/README.md) | artifact type | Maven | no | |
+| [OCI images](artifact-types/oci-images/README.md) | artifact type | OCI images, Docker Hub proxy via multi-project | no | |
+| [Helm](artifact-types/helm/README.md) | artifact type | Helm charts (OCI) | no | |
+| [Homebrew](artifact-types/homebrew/README.md) | artifact type | Homebrew bottles and metadata (proxy) | no | |
+| PyPI | artifact type | PyPI | | planned |
+| Cargo | artifact type | Cargo | | planned |
+| Go modules | artifact type | Go modules, checksum database | | planned |
 
-```mermaid
-flowchart LR
-    subgraph GH["GitHub Actions"]
-      MVN["mvn verify / deploy"]
-      NPM["npm ci / publish"]
-      IMG["docker build / push"]
-      CH["helm package / push"]
-    end
-    subgraph H["demo.container-registry.com"]
-      MP["maven-central<br/>proxy, read-only"]
-      MH["todomvc-maven<br/>hosted"]
-      NP["npmjs<br/>proxy, read-only"]
-      NH["todomvc-npm<br/>hosted"]
-      T["todomvc<br/>multi-project:<br/>images + chart"]
-      D["dockerhub<br/>proxy, read-only"]
-    end
-    subgraph K["Kubernetes (kind)"]
-      F["Flux<br/>OCIRepository + HelmRelease"]
-      KL["kubelet"]
-    end
-    MP -- dependencies --> MVN
-    MVN -- jar --> MH
-    NP -- dependencies --> NPM
-    NPM -- "@todomvc/todo-ui" --> NH
-    T -. "base images via sub-project" .-> D
-    T -- base images --> IMG
-    IMG -- todo-api, todo-ui --> T
-    CH -- charts/todomvc --> T
-    T -- chart --> F
-    T -- images --> KL
-```
+**Levels.** An *artifact type* example shows one format on its own: provision,
+push or proxy, pull, clean up. An *end to end* example wires several formats
+into a delivery flow. New levels get their own top-level directory, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-## The project layout
+## Concepts
 
-| Project | Kind | Clients use it for |
-|---|---|---|
-| `maven-central` | proxy cache of Maven Central, read-only, public | Maven mirror (`mirrorOf *,!8gcr-hosted`) |
-| `todomvc-maven` | hosted, public | Maven `distributionManagement` (id `8gcr-hosted`) |
-| `npmjs` | proxy cache of npmjs.org, read-only, public | `.npmrc` `registry=` |
-| `todomvc-npm` | hosted, public | `.npmrc` `@todomvc:registry=` |
-| `todomvc` | multi-project, private | push and pull of images and the Helm chart; base images through it |
-| `dockerhub` | proxy cache of Docker Hub, read-only, private | only as sub-project of `todomvc` |
+[docs/concepts.md](docs/concepts.md): hosted, proxy-cache and multi-projects,
+their limits in 2.16, and the keyless trust chain of trusted issuers and
+secretless robots.
 
-Multi-project resolution in 2.16 works for OCI artifacts only, so npm and Maven
-use a proxy and a hosted project each. [01: Concepts](docs/01-concepts.md#the-layout-and-why)
-has the reasons and the evidence.
-
-## The keyless trust chain
-
-```mermaid
-flowchart LR
-    GHA["GitHub Actions job"] -- "OIDC token<br/>aud = demo.container-registry.com" --> TI1["trusted issuer github-actions<br/>online JWKS"]
-    SA["Kubernetes ServiceAccount<br/>todomvc/todomvc"] -- "SA token<br/>aud = demo.container-registry.com" --> TI2["trusted issuer kind-todomvc<br/>offline, pinned JWKS"]
-    TI1 -- "repository + ref = refs/heads/main" --> R1["robot todomvc-ci<br/>push"]
-    TI1 -- "repository + event_name = pull_request" --> R2["robot todomvc-ci-pr<br/>pull"]
-    TI2 -- "sub = system:serviceaccount:todomvc:todomvc" --> R3["robot todomvc-k8s<br/>pull todomvc"]
-```
-
-Every client sends the token as the HTTP Basic password with user `jwt`.
-Harbor checks signature, issuer and audience, then maps the claims to a robot
-that has no secret of its own. Flux's source-controller and the kubelet (through
-a KEP-4412 credential provider) both mint the ServiceAccount token themselves.
-
-## Read it in order
-
-The sections follow the flow. Paths and headings are stable for linking.
-
-| Step | Page |
-|---|---|
-| Concepts | [docs/01-concepts.md](docs/01-concepts.md): layout, multi-project, trust chain |
-| 1. Setup | [docs/02-setup.md](docs/02-setup.md): `scripts/setup-8gcr.py`, the API calls behind it |
-| 2. Maven | [docs/03-maven.md](docs/03-maven.md): resolve through the proxy, deploy to hosted, resolve it back |
-| 3. npm | [docs/04-npm.md](docs/04-npm.md): the same for npm, with a scoped package |
-| 4. Images | [docs/05-images.md](docs/05-images.md): base images through the multi-project, push the app images |
-| 5. Helm chart | [docs/06-helm-chart.md](docs/06-helm-chart.md): package and push the chart as OCI |
-| 6. Pipeline | [docs/07-pipeline.md](docs/07-pipeline.md): the GitHub Actions workflows, tokens, robots, timings |
-| 7. Flux deploy | [docs/08-flux-deploy.md](docs/08-flux-deploy.md): kind, offline trusted issuer, Flux and kubelet without secrets |
-
-## Short path
-
-```bash
-export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...   # your own instance
-export GITHUB_REPO=<owner>/<repo>  # your fork; the CI robots trust only this repository
-./scripts/setup-8gcr.py            # projects, trusted issuer, robots
-# push to main, or: gh workflow run publish.yml --ref main
-# build the credential provider first, see docs/08-flux-deploy.md
-kind create cluster --config deploy/kind/kind-config.yaml
-kubectl apply -f deploy/kind/node-audience-rbac.yaml
-./scripts/setup-8gcr.py kind       # trust this cluster
-kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.10.0/install.yaml
-kubectl apply -f deploy/flux/
-```
-
-`demo.container-registry.com` is a shared public demo; you can log in and look
-around. Every account there is an admin, so anyone can change its projects,
-trusted issuers and robots. To run the flow yourself, point it at your own 8gcr
-instance.
-
-## Repository layout
+## Layout
 
 ```
-apps/todo-api/        Spring Boot backend: the Maven artifact and one image
-apps/todo-ui/         Vue 3 frontend: the npm package @todomvc/todo-ui and one image
-deploy/chart/todomvc/ Helm chart for both, pushed as OCI
-deploy/flux/          Namespace, ServiceAccount, OCIRepository, HelmRelease
-deploy/kind/          kind config and the kubelet credential provider
-.github/              The pipeline and the OIDC token action
-scripts/setup-8gcr.py The only provisioning step, idempotent
-docs/                 The walkthrough
+README.md               this catalogue
+docs/                   concepts shared by all examples
+artifact-types/<type>/  one format each: README, sample, setup.py
+end-to-end/<name>/      complete flows: apps, chart, deploy, docs, setup.py
+lib/harborlib.py        provisioning helpers every setup.py imports
+.github/workflows/      one workflow per example, filtered to its directory
+.github/actions/        shared: the GitHub OIDC token action, the version action
 ```
 
-To point this at your own instance, change `demo.container-registry.com` in
-`apps/todo-api/pom.xml`, `apps/todo-api/.mvn/settings.xml`, `apps/todo-ui/.npmrc`,
-`.github/workflows/_pipeline.yml`, `deploy/chart/todomvc/values.yaml`,
-`deploy/flux/` and `deploy/kind/`. On 8gcr builds newer than v2.16.0 the package
-paths move from `/npm/` and `/maven/` to `/pkg/npm/` and `/pkg/maven/`; the same
-files carry them.
+## Requirements
 
-Every command in the docs was run against the demo (v2.16.0) on 2026-11-20 and
-the output shown is what it printed, trimmed.
+8gcr / Harbor Next 2.16 with *Multi-Format Artifacts* enabled, and *Federated
+Robot Accounts* for the keyless examples. Setup scripts need Python 3.10+ and
+nothing else, and read `HARBOR_URL`, `HARBOR_USER` (default `admin`) and
+`HARBOR_PASS`.

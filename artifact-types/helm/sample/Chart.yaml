@@ -1,0 +1,5 @@
+apiVersion: v2
+name: hello
+description: Minimal chart for the 8gcr Helm example.
+type: application
+version: 0.1.0
