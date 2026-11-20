@@ -118,11 +118,13 @@ up demo:
 The Maven numbers are dominated by the proxy cache going upstream for files it
 dropped instead of storing ([2. Maven](03-maven.md#the-proxy-cache-fills-less-than-it-serves)).
 
-The pull request run 44653689841 on the current layout (hosted repository
-listed in `settings.xml`) took longer for Maven: `versions:set` 3:49 and
-`verify` 4:49 for a 9 min 2 s job, with 273 lookups against `8gcr-hosted`
-that end in 404 before the mirror is asked. The Maven build inside the
-`todo-api` image took 5:49.
+Maven job on pull requests, with and without the hosted project as a
+resolution source ([2. Maven](03-maven.md#the-client-configuration)):
+
+| Run | Hosted project in resolution | Lookups against `8gcr-hosted` | `versions:set` | `verify` | Maven job |
+|---|---|---|---|---|---|
+| 44653689841 | yes | 273 | 3:49 | 4:49 | 9 min 2 s |
+| 44691004859 | no | 0 | 2:24 | 3:07 | 5 min 42 s |
 
 ## Running it against your own fork
 
