@@ -62,11 +62,17 @@ jobs:
         run: |
           mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ needs.version.outputs.version }}" -DgenerateBackupPoms=false
           mvn -B -s .mvn/settings.xml verify
+      # A fresh token: GitHub's expires within minutes, and the build above can outlast it.
+      - id: auth-publish
+        if: inputs.publish
+        uses: ./.github/actions/8gcr-token
+        with:
+          audience: ${{ env.REGISTRY }}
       - name: Publish the jar
         if: inputs.publish
         env:
-          HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
-          HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
+          HARBOR_USERNAME: ${{ steps.auth-publish.outputs.username }}
+          HARBOR_PASSWORD: ${{ steps.auth-publish.outputs.password }}
         run: |
           mvn -B -s .mvn/settings.xml deploy -DskipTests
           echo "Published \`com.containerregistry.todo:todo-api:${{ needs.version.outputs.version }}\` to $MAVEN_URL" >> "$GITHUB_STEP_SUMMARY"
@@ -130,7 +136,7 @@ jobs:
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: apps/${{ matrix.app }}
-          push: ${{ inputs.publish }}
+          load: true
           provenance: false
           # Base images resolve through the multi-project, which serves them from its
           # Docker Hub sub-project. The login above is what lets buildx read it.
@@ -139,6 +145,21 @@ jobs:
           tags: |
             ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
             ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ needs.version.outputs.version }}
+      # A fresh token: GitHub's expires within minutes, and the build above can outlast it.
+      - id: auth-publish
+        if: inputs.publish
+        uses: ./.github/actions/8gcr-token
+        with:
+          audience: ${{ env.REGISTRY }}
+      - name: Push
+        if: inputs.publish
+        env:
+          HARBOR_PASSWORD: ${{ steps.auth-publish.outputs.password }}
+          IMAGE: ${{ env.OCI_PROJECT }}/${{ matrix.app }}
+        run: |
+          printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u jwt --password-stdin
+          docker push --all-tags "$IMAGE"
+          echo "Pushed \`$IMAGE:${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   chart:
     needs: [version, images]
