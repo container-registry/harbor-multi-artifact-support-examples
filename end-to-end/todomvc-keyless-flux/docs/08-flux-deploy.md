@@ -205,15 +205,19 @@ mint the registry-audience token for that one account only. Rerun with it,
 `other` now fails one step earlier, in the kubelet, while `todomvc` still pulls:
 
 ```console
-$ kubectl -n todomvc run p-todomvc --image=$HOST/todomvc/todo-api:bfa6cd6... \
+$ kubectl -n todomvc run p-todomvc --image=$HOST/todomvc/todo-api:bfa6cd622e89eddf64c7845059ce0d64f7ac1f6f \
     --overrides='{"spec":{"serviceAccountName":"todomvc"}}' --image-pull-policy=Always --restart=Never --command -- true
-$ kubectl -n todomvc run p-other --image=$HOST/todomvc/todo-api:bfa6cd6... \
+$ kubectl -n todomvc run p-other --image=$HOST/todomvc/todo-api:bfa6cd622e89eddf64c7845059ce0d64f7ac1f6f \
     --overrides='{"spec":{"serviceAccountName":"other"}}' --image-pull-policy=Always --restart=Never --command -- true
+$ kubectl -n todomvc wait --for=jsonpath='{.status.phase}'=Succeeded pod/p-todomvc --timeout=120s
+pod/p-todomvc condition met
+$ kubectl -n todomvc wait --for=jsonpath='{.status.containerStatuses[0].state.waiting.reason}'=ImagePullBackOff pod/p-other --timeout=120s
+pod/p-other condition met
 $ kubectl -n todomvc get pod p-todomvc p-other -o custom-columns='N:.metadata.name,P:.status.phase,W:.status.containerStatuses[0].state.waiting.reason'
 N           P           W
 p-todomvc   Succeeded   <none>
 p-other     Pending     ImagePullBackOff
-$ docker exec todomvc-control-plane journalctl -u kubelet | grep -o 'is not authorized to request tokens for audience \\"[a-z.-]*\\"' | tail -1
+$ docker exec todomvc-control-plane journalctl -u kubelet | grep -o 'is not authorized to request tokens for audience \\"[^\\"]*\\"' | tail -1
 is not authorized to request tokens for audience \"demo.container-registry.com\"
 ```
 

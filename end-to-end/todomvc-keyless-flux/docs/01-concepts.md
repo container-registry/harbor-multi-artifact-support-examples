@@ -57,6 +57,7 @@ own tags, not those of its sub-projects. Measured with a pull token for
 `todomvc`:
 
 ```console
+$ HOST=${HARBOR_URL#https://}
 $ SA=$(kubectl -n todomvc create token todomvc --audience $HOST)      # see 7. Flux deploy
 $ tok() { curl -s -u "jwt:$SA" "$HARBOR_URL/service/token?service=harbor-registry&scope=repository:$1:pull" | jq -r .token; }
 $ curl -H "Authorization: Bearer $(tok todomvc/charts/todomvc)" $HARBOR_URL/v2/todomvc/charts/todomvc/tags/list
