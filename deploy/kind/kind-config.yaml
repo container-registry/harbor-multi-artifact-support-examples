@@ -1,0 +1,20 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: todomvc
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0
+    extraMounts:
+      - hostPath: ./deploy/kind/credential-provider/bin
+        containerPath: /etc/kubernetes/credential-provider/bin
+        readOnly: true
+      - hostPath: ./deploy/kind/credential-provider-config.yaml
+        containerPath: /etc/kubernetes/credential-provider/config.yaml
+        readOnly: true
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            image-credential-provider-config: /etc/kubernetes/credential-provider/config.yaml
+            image-credential-provider-bin-dir: /etc/kubernetes/credential-provider/bin

@@ -1,0 +1,29 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: todomvc-chart
+  namespace: todomvc
+spec:
+  interval: 1m
+  url: oci://demo.container-registry.com/todomvc/charts/todomvc
+  ref:
+    semver: ">=0.1.0"
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  provider: generic
+  serviceAccountName: todomvc
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: todomvc
+  namespace: todomvc
+spec:
+  interval: 5m
+  chartRef:
+    kind: OCIRepository
+    name: todomvc-chart
+  install:
+    remediation:
+      retries: 3

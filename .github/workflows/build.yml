@@ -1,11 +1,10 @@
-# Pull request entry point: build everything, publish nothing.
+# Pull request entry point: build everything through the registry, publish nothing.
 #
-# The important line here is the permissions block. Every step after checkout runs
-# code from the branch under review, including Maven plugins, npm lifecycle
-# scripts and Dockerfile RUN layers. Granting `id-token: write` would let any of
-# them mint a registry credential directly from the runner, whatever step-level
-# conditions the pipeline sets, because a step condition is not a permission
-# boundary. So the grant is simply never made on this path.
+# id-token: write is granted here on purpose. The build code of a pull request can
+# mint a token, but Harbor maps a token with event_name = pull_request to the
+# todomvc-ci-pr robot, which can only pull. The boundary is the claim rule in the
+# registry, not a step condition in this file. Pull requests from forks get no
+# OIDC token from GitHub at all, so their auth step fails.
 
 name: build
 
@@ -20,5 +19,6 @@ jobs:
     uses: ./.github/workflows/_pipeline.yml
     permissions:
       contents: read
+      id-token: write
     with:
       publish: false

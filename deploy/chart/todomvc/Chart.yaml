@@ -1,0 +1,7 @@
+apiVersion: v2
+name: todomvc
+description: TodoMVC API and UI, deployed from images in Harbor.
+type: application
+# CI overrides both on `helm package`: version per run, appVersion = the commit the images were built from.
+version: 0.1.0
+appVersion: latest

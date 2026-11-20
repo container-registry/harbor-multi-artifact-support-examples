@@ -4,6 +4,11 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # The bundle calls /api on its own origin, so the browser never needs to reach the API directly.
+    location /api/ {
+        proxy_pass ${API_UPSTREAM};
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }

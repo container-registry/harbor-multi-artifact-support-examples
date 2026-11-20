@@ -10,9 +10,9 @@
          that catches both, so every byte of the build passes through the Harbor proxy cache. -->
     <mirror>
       <id>8gcr</id>
-      <name>8gcr Maven proxy cache</name>
+      <name>todomvc-maven on 8gcr</name>
       <mirrorOf>*</mirrorOf>
-      <url>https://8gcr.container-registry.dev/maven/todomvc-maven</url>
+      <url>https://demo.container-registry.com/maven/todomvc-maven</url>
     </mirror>
   </mirrors>
 
