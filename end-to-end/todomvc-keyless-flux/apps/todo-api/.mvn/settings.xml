@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+  <!-- All resolution goes through the read-only proxy of Maven Central. The build never
+       consumes artifacts from the hosted project, so it is not a resolution source here;
+       !8gcr-hosted only keeps an explicit -DremoteRepositories=8gcr-hosted::... (the
+       pipeline's read-back) from being redirected to the proxy. -->
+  <mirrors>
+    <mirror>
+      <id>8gcr-proxy</id>
+      <mirrorOf>*,!8gcr-hosted</mirrorOf>
+      <url>https://demo.container-registry.com/maven/maven-central</url>
+    </mirror>
+  </mirrors>
+
+  <servers>
+    <!-- Same id as distributionManagement in pom.xml: deploy credentials. -->
+    <server>
+      <id>8gcr-hosted</id>
+      <username>${env.HARBOR_USERNAME}</username>
+      <password>${env.HARBOR_PASSWORD}</password>
+    </server>
+  </servers>
+
+</settings>

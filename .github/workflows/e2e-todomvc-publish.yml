@@ -1,0 +1,32 @@
+# Publish entry point: pushes to main, and manual runs of main.
+#
+# Two locks on the same door. The job condition below keeps a manual run on another
+# branch from publishing, and Harbor only maps tokens whose ref is refs/heads/main
+# to the push robot, so a token minted anywhere else cannot push even if a workflow
+# file on a branch drops this condition.
+
+name: e2e-todomvc publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - end-to-end/todomvc-keyless-flux/**
+      - lib/**
+      - .github/actions/**
+      - .github/workflows/e2e-todomvc-*.yml
+      - .github/workflows/_e2e-todomvc-pipeline.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/_e2e-todomvc-pipeline.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      publish: true

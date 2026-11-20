@@ -1,0 +1,10 @@
+{
+  "name": "@example/hello",
+  "version": "0.1.0",
+  "description": "Minimal package for the 8gcr npm example.",
+  "license": "MIT",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ]
+}

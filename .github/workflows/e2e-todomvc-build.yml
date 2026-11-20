@@ -1,0 +1,30 @@
+# Pull request entry point: build everything through the registry, publish nothing.
+#
+# id-token: write is granted here on purpose. The build code of a pull request can
+# mint a token, but Harbor maps a token with event_name = pull_request to the
+# todomvc-ci-pr robot, which can only pull. The boundary is the claim rule in the
+# registry, not a step condition in this file. Pull requests from forks get no
+# OIDC token from GitHub at all, so their auth step fails.
+
+name: e2e-todomvc build
+
+on:
+  pull_request:
+    paths:
+      - end-to-end/todomvc-keyless-flux/**
+      - lib/**
+      - .github/actions/**
+      - .github/workflows/e2e-todomvc-*.yml
+      - .github/workflows/_e2e-todomvc-pipeline.yml
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_e2e-todomvc-pipeline.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      publish: false

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <!-- Resolution, plugins included, goes through the read-only proxy of Maven Central.
+       !example-hosted keeps an explicit -DremoteRepositories=example-hosted::... (the
+       read-back) from being redirected to the proxy. -->
+  <mirrors>
+    <mirror>
+      <id>example-proxy</id>
+      <mirrorOf>*,!example-hosted</mirrorOf>
+      <url>${env.HARBOR_URL}/maven/maven-central</url>
+    </mirror>
+  </mirrors>
+  <servers>
+    <server>
+      <id>example-hosted</id>
+      <username>${env.HARBOR_ROBOT_USER}</username>
+      <password>${env.HARBOR_ROBOT_SECRET}</password>
+    </server>
+  </servers>
+</settings>

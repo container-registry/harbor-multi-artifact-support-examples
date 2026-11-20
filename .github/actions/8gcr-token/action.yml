@@ -38,3 +38,5 @@ runs:
           // failing curl that dumps its arguments, leaks a valid credential.
           core.setSecret(token);
           core.setOutput('password', token);
+          const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+          core.info(`token for aud=${claims.aud} event_name=${claims.event_name} ref=${claims.ref}, valid ${claims.exp - claims.iat}s`);

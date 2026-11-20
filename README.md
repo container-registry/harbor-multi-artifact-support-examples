@@ -1,132 +1,54 @@
-# 8gcr Harbor registry for npm, Maven and container images
+# 8gcr examples: one registry for every artifact type
 
-A working example of using a single [8gcr](https://container-registry.com/8gcr) / Harbor
-instance as the only artifact store a project needs:
+Runnable examples for [8gears Container Registry (8gcr)](https://container-registry.com/8gcr)
+2.16 as the registry for containers, Helm charts and language packages. Each
+example lives in its own directory with a README, a setup script and the
+material it pushes and pulls. Every transcript was run against
+`https://demo.container-registry.com`, a [shared public demo](docs/shared-demo.md).
 
-- **proxy** npm packages from npmjs.org and Maven artifacts from Maven Central through it,
-- **publish** your own npm package and Maven jar back into Harbor,
-- **push and pull container images**,
-- From one GitHub Actions pipeline, with **no registry secret stored anywhere**.
+## Examples
 
-The two TodoMVC apps in `apps/` exist only to give the pipeline something real to build.
-The artifact flow, the pipeline and the guide are the point.
+| Example | Level | Artifact types | Keyless | Status |
+|---|---|---|---|---|
+| [TodoMVC, keyless, from source to Flux](end-to-end/todomvc-keyless-flux/README.md) | end to end | Maven, npm, OCI images, Helm | yes: GitHub OIDC, Kubernetes ServiceAccount tokens | available |
+| [npm](artifact-types/npm/README.md) | artifact type | npm | no | available |
+| [Maven](artifact-types/maven/README.md) | artifact type | Maven | no | available |
+| [OCI images](artifact-types/oci-images/README.md) | artifact type | OCI images, Docker Hub proxy via multi-project | no | available |
+| [Helm](artifact-types/helm/README.md) | artifact type | Helm charts (OCI) | no | available |
+| [Homebrew](artifact-types/homebrew/README.md) | artifact type | Homebrew bottles and metadata (proxy) | no | available |
+| PyPI | artifact type | PyPI | n/a | planned |
+| Cargo | artifact type | Cargo | n/a | planned |
+| Go modules | artifact type | Go modules, checksum database | n/a | planned |
 
-![The TodoMVC app the pipeline builds](docs/images/todomvc-app.png)
+**Levels.** An *artifact type* example shows one format on its own: provision,
+push or proxy, pull, clean up. An *end to end* example wires several formats
+into a delivery flow. New levels get their own top-level directory, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-## What you will actually see
+## Concepts
 
-One project per ecosystem, each acting as a pull-through cache for its upstream and as a
-home for your own packages at the same time:
+[docs/concepts.md](docs/concepts.md): hosted, proxy-cache and multi-projects,
+their limits in 2.16, and the keyless trust chain of trusted issuers and
+secretless robots.
 
-![Projects in the registry portal](docs/images/portal-projects.png)
-
-After a build, the npm project holds both the dependencies your build pulled from
-npmjs.org and the package your pipeline published:
-
-![npm packages cached and published](docs/images/portal-npm-repositories.png)
-
-## Read it front to back
-
-| | |
-|---|---|
-| [01: Concepts](docs/01-concepts.md) | Native hosting vs proxy cache, precedence, `proxy_cache_allow_push` |
-| [02: Registry setup](docs/02-harbor-setup.md) | Endpoints, projects, federated identity, secretless robot |
-| [03: npm](npm/README.md) | Package it, publish it, proxy through it, pull it back |
-| [04: Maven](maven/README.md) | The same four steps for Maven |
-| [05: Images and keyless auth](images/README.md) | Push and pull with no stored credential |
-| [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
-| [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
-| [08: Homebrew](homebrew/README.md) | `brew install` on intranet machines that cannot reach Homebrew, plus your own tools |
-| [Recorded demos](docs/demos/README.md) | Every flow above, recorded end to end against a fresh instance |
-
-## The five-minute path
-
-Provision the registry side. This is idempotent, so re-running it is safe:
-
-```bash
-export HARBOR_URL=https://8gcr.container-registry.dev
-export HARBOR_USER=admin HARBOR_PASS=...
-export GITHUB_REPO=your-org/your-repo
-./scripts/setup-8gcr.py
-```
-
-It creates two proxy-cache registry endpoints, three projects, a federated identity
-provider trusting GitHub's OIDC issuer, and a robot account that has **no secret** and can
-only be assumed by a token carrying the right claims.
-
-Then point your clients at it. npm (`apps/todo-ui/.npmrc`):
-
-```ini
-registry=https://8gcr.container-registry.dev/npm/todomvc-npm/
-always-auth=true
-```
-
-Maven (`apps/todo-api/.mvn/settings.xml`) uses a wildcard mirror so plugin downloads are
-covered too, not just dependencies:
-
-```xml
-<mirror>
-  <id>8gcr</id>
-  <mirrorOf>*</mirrorOf>
-  <url>https://8gcr.container-registry.dev/maven/todomvc-maven</url>
-</mirror>
-```
-
-Install, publish, read back. `npm run build` is not optional: `package.json` ships
-`files: ["dist"]`, `dist` is not in git, and publishing without it succeeds with an
-empty package at a version you can never reuse.
-
-```bash
-cd apps/todo-ui  && npm ci && npm run build && npm publish
-cd apps/todo-api && mvn -B -s .mvn/settings.xml deploy
-```
-
-Needs JDK 21, Maven 3.9, Node 20 and Docker. `docker build` needs none of them, since
-`apps/todo-api/Dockerfile` builds inside `maven:3.9-eclipse-temurin-21`.
-
-The setup script takes the registry URL as an argument; the clients do not. Pointing
-this repository at your own instance means editing the URL, scheme included, in five
-committed files — [06-pipeline.md](docs/06-pipeline.md#running-it-against-your-own-registry)
-step 3 lists them.
-
-## How the keyless part works
-
-There is no token exchange and no secret to rotate. The pipeline asks GitHub for an OIDC
-token and hands it straight to the registry as the HTTP Basic **password**. Harbor
-validates the signature against the trusted issuer's JWKS and matches the token's
-claims to a robot account.
-
-```yaml
-- id: auth
-  uses: ./.github/actions/8gcr-token
-  with:
-    audience: 8gcr.container-registry.dev
-
-- run: |
-    printf '%s' '${{ steps.auth.outputs.password }}' \
-      | docker login 8gcr.container-registry.dev -u jwt --password-stdin
-```
-
-The username is ignored. The token expires in minutes. Nothing is stored in
-`secrets.*`.
-
-## Repository layout
+## Layout
 
 ```
-apps/todo-api/      Spring Boot + H2 backend. The Maven artifact.
-apps/todo-ui/       Vue 3 TodoMVC frontend. The npm artifact.
-.github/workflows/  The pipeline that publishes all three artifact kinds.
-npm/                npm guide: package, publish, proxy, pull back.
-maven/              Maven guide: the same four steps for Maven.
-images/             Container images guide: keyless push and pull.
-homebrew/           Homebrew use case: guide, setup script, example tap, diagrams.
-scripts/            Idempotent registry provisioning.
-docs/               Concepts, registry setup, pipeline, local dev, recorded demos.
+README.md               this catalogue
+docs/                   concepts shared by all examples
+artifact-types/<type>/  one format each: README, sample, setup.py
+end-to-end/<name>/      complete flows: apps, chart, deploy, docs, setup.py
+lib/harborlib.py        provisioning helpers every setup.py imports
+.github/workflows/      per example: entry workflows filtered to its directory, plus
+                        an optional reusable _<prefix>-pipeline.yml they call
+.github/actions/        shared: the GitHub OIDC token action, the version action
 ```
 
-## Every command here was run
+## Requirements
 
-Each page documents what was executed against
-`https://8gcr.container-registry.dev`, with the output it produced. Where a
-behaviour is still rough, the page says so at the point where you would hit it,
-with the measurement that shows it, rather than in a separate caveats section.
+8gcr 2.16 with *Multi-Format Artifacts* enabled, and *Federated
+Robot Accounts* for the keyless examples. Both are opt-in commercial features of
+8gcr. Setup scripts need Python 3.10+ with
+the standard library only, and read `HARBOR_URL`, `HARBOR_USER` (default
+`admin`) and `HARBOR_PASS`. Each example lists its other tools; for instance
+the end-to-end example's `setup.py kind` also calls `kubectl`.

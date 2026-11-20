@@ -1,0 +1,26 @@
+# The node authorizer only lets a kubelet mint service account tokens for
+# audiences it has been granted. Without this the credential provider gets
+# "not authorized to request tokens for audience" (verified on 1.37).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: harbor-registry-audience
+rules:
+  - apiGroups: [""]
+    resources: ["demo.container-registry.com"]
+    # Only for the ServiceAccount the app runs as, not for every account in the cluster.
+    resourceNames: ["todomvc"]
+    verbs: ["request-serviceaccounts-token-audience"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: harbor-registry-audience
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: harbor-registry-audience
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:nodes

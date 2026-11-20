@@ -1,0 +1,42 @@
+{{- $ctx := dict "root" . "name" "todo-ui" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-ui
+  labels: {{- include "todomvc.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ .Values.ui.replicas }}
+  selector:
+    matchLabels: {{- include "todomvc.labels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "todomvc.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      containers:
+        - name: todo-ui
+          image: {{ include "todomvc.image" $ctx }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: API_UPSTREAM
+              value: http://todo-api.{{ .Release.Namespace }}.svc:8080
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-ui
+  labels: {{- include "todomvc.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ .Values.ui.service.type }}
+  selector: {{- include "todomvc.labels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.ui.service.port }}
+      targetPort: http

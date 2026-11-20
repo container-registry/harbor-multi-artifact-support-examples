@@ -1,0 +1,17 @@
+image:
+  registry: demo.container-registry.com/todomvc
+  # Defaults to the chart's appVersion, which CI sets to the commit the images were built from.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# The pods' service account. With the kubelet credential provider (deploy/kind), its
+# token is what authenticates the image pull, so Harbor's claim rule names it.
+serviceAccountName: todomvc
+
+api:
+  replicas: 1
+ui:
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 80

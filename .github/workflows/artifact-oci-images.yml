@@ -1,0 +1,26 @@
+# Checks the OCI image example without credentials: the setup script compiles and
+# the sample image builds from Docker Hub directly. Pushing needs a robot secret.
+name: artifact oci-images
+
+on:
+  pull_request:
+    paths: [artifact-types/oci-images/**, lib/**, .github/workflows/artifact-oci-images.yml]
+  push:
+    branches: [main]
+    paths: [artifact-types/oci-images/**, lib/**, .github/workflows/artifact-oci-images.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artifact-types/oci-images
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: python3 setup.py --help
+      - run: docker build -t hello:check sample && docker run --rm hello:check
