@@ -113,10 +113,11 @@ support exactly that split:
 | Maven | mirror `*,!8gcr-hosted` → `maven-central` | `distributionManagement` id `8gcr-hosted` → `todomvc-maven` |
 | npm | `registry=` → `npmjs` | `@todomvc:registry=` → `todomvc-npm` |
 
-A consumer of the published artifact uses the same files: Maven lists
-`8gcr-hosted` as a repository, npm routes the `@todomvc` scope to the hosted
-project. [03](03-maven.md#resolve-it-back) and [04](04-npm.md#resolve-it-back)
-show both.
+Reading a published artifact back: npm routes the `@todomvc` scope to the
+hosted project, so the same `.npmrc` works for consumers. Maven names the
+hosted project explicitly where it is needed; the app's own build does not
+consume its jar, so it does not search there.
+[03](03-maven.md#resolve-it-back) and [04](04-npm.md#resolve-it-back) show both.
 
 ### Public and private
 

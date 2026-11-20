@@ -16,16 +16,6 @@
   <url>https://demo.container-registry.com/maven/maven-central</url>
 </mirror>
 ...
-<profile>
-  <id>8gcr-hosted</id>
-  <repositories>
-    <repository>
-      <id>8gcr-hosted</id>
-      <url>https://demo.container-registry.com/maven/todomvc-maven</url>
-    </repository>
-  </repositories>
-</profile>
-...
 <server>
   <id>8gcr-hosted</id>
   <username>${env.HARBOR_USERNAME}</username>
@@ -47,17 +37,33 @@ and in [`pom.xml`](../apps/todo-api/pom.xml):
 - `mirrorOf *` rather than `central`: `central` covers the built-in
   repository for dependencies and plugins, but not repositories that
   third-party POMs declare themselves. The wildcard sends those through the
-  proxy too. `!8gcr-hosted` exempts the hosted repository, so the jar this
-  project publishes can be resolved from where it was deployed.
-- One id, `8gcr-hosted`, ties the repository, `distributionManagement` and the
-  `<server>` credentials together.
+  proxy too.
+- The hosted project is not a resolution source. No build in this flow
+  consumes the published jar (the image builds from source), and listing it as
+  a repository made Maven ask it first for every dependency: 218 extra 404
+  lookups locally, 273 in CI, and a Maven job of 9:02 instead of 5:56.
+  `!8gcr-hosted` only keeps an explicit `-DremoteRepositories=8gcr-hosted::...`
+  from being sent to the proxy, which the read-back below relies on.
+- One id, `8gcr-hosted`, ties `distributionManagement` to the `<server>`
+  credentials.
 - Neither project needs a credential to read: both are public, and Maven only
   sends `<server>` credentials when challenged.
 
-The cost of listing the hosted repository: Maven asks it first for every
-dependency. In the run below that was 218 extra lookups answered with 404.
-A build that never consumes artifacts from the hosted project can drop the
-`8gcr-hosted` profile.
+A cold build with this configuration, inside `maven:3.9-eclipse-temurin-21`:
+
+```console
+$ mvn -B -s .mvn/settings.xml verify -DskipTests
+...
+[INFO] BUILD SUCCESS
+[INFO] Total time:  03:30 min
+$ grep -c 'from 8gcr-hosted' build.log
+0
+$ grep -rhoE '>[a-z0-9-]+=' ~/.m2/repository --include=_remote.repositories | sort | uniq -c
+ 473 >8gcr-proxy=
+```
+
+Every resolved file came through the `maven-central` proxy, none from Central
+directly and none from the hosted project.
 
 ## Build and deploy, keyless
 
@@ -84,7 +90,8 @@ The robot create response carries no secret:
 `{"id":5,"name":"robot$probe-publisher","secret":null}`. This block was rerun
 as written afterwards and created the same claim for robot 6.
 
-Cold local repository, inside `maven:3.9-eclipse-temurin-21`:
+The deploy (run while the hosted project was still configured as a
+repository, which only affects resolution):
 
 ```console
 $ export HARBOR_USERNAME=jwt HARBOR_PASSWORD="$(kubectl -n todomvc create token publisher --audience demo.container-registry.com --duration 1h)"
@@ -95,13 +102,7 @@ $ mvn -B -s .mvn/settings.xml deploy -DskipTests
 [INFO] Uploaded to 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.0.1-local/todo-api-0.0.1-local.jar (54 MB at 2.6 MB/s)
 [INFO] Uploaded to 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/maven-metadata.xml (359 B at 3.7 kB/s)
 [INFO] BUILD SUCCESS
-[INFO] Total time:  03:01 min
-$ grep -rhoE '>[a-z0-9-]+=' ~/.m2/repository --include=_remote.repositories | sort | uniq -c
- 616 >8gcr-proxy=
 ```
-
-Every resolved file came through the `maven-central` proxy, none from Central
-directly.
 
 Release versions are immutable, so CI sets one per run
 (`0.1.<run_number>`, see [6. Pipeline](07-pipeline.md#versions)).
@@ -137,19 +138,22 @@ still went into the proxy project; the hosted project behaves the same.)
 
 ## Resolve it back
 
-A second build with an empty local repository and the same `settings.xml`
-resolves the jar from the hosted project and nothing else:
+A separate read-back names the hosted project explicitly, with an empty local
+repository:
 
 ```console
 $ mvn -B -s .mvn/settings.xml dependency:get -Dtransitive=false \
+    -DremoteRepositories=8gcr-hosted::default::https://demo.container-registry.com/maven/todomvc-maven \
     -Dartifact=com.containerregistry.todo:todo-api:0.0.1-local
-[INFO] Resolving com.containerregistry.todo:todo-api:jar:0.0.1-local
-[INFO] Downloaded from 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.0.1-local/todo-api-0.0.1-local.pom (2.0 kB at 4.7 kB/s)
-[INFO] Downloaded from 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.0.1-local/todo-api-0.0.1-local.jar (54 MB at 14 MB/s)
+[INFO] Downloaded from 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.0.1-local/todo-api-0.0.1-local.pom (2.0 kB at 2.2 kB/s)
+[INFO] Downloaded from 8gcr-hosted: https://demo.container-registry.com/maven/todomvc-maven/com/containerregistry/todo/todo-api/0.0.1-local/todo-api-0.0.1-local.jar (54 MB at 13 MB/s)
 [INFO] BUILD SUCCESS
+[INFO] Total time:  02:41 min
 ```
 
-The pipeline's `verify` job runs the same command after every publish.
+The pipeline's `verify` job runs the same command after every publish. A
+project that does consume the jar adds `todomvc-maven` as a `<repository>`
+with id `8gcr-hosted`.
 
 ## The proxy cache fills less than it serves
 

@@ -3,9 +3,10 @@
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
 
-  <!-- Everything except the hosted repository goes through the read-only proxy of
-       Maven Central. mirrorOf=* catches plugin repositories too, which a <repositories>
-       entry in the pom would not. -->
+  <!-- All resolution goes through the read-only proxy of Maven Central. The build never
+       consumes artifacts from the hosted project, so it is not a resolution source here;
+       !8gcr-hosted only keeps an explicit -DremoteRepositories=8gcr-hosted::... (the
+       pipeline's read-back) from being redirected to the proxy. -->
   <mirrors>
     <mirror>
       <id>8gcr-proxy</id>
@@ -14,25 +15,8 @@
     </mirror>
   </mirrors>
 
-  <!-- The hosted project, where CI deploys todo-api. Builds that depend on it resolve
-       it from here; the same id is the distributionManagement target in pom.xml. -->
-  <profiles>
-    <profile>
-      <id>8gcr-hosted</id>
-      <repositories>
-        <repository>
-          <id>8gcr-hosted</id>
-          <url>https://demo.container-registry.com/maven/todomvc-maven</url>
-          <snapshots><enabled>false</enabled></snapshots>
-        </repository>
-      </repositories>
-    </profile>
-  </profiles>
-  <activeProfiles>
-    <activeProfile>8gcr-hosted</activeProfile>
-  </activeProfiles>
-
   <servers>
+    <!-- Same id as distributionManagement in pom.xml: deploy credentials. -->
     <server>
       <id>8gcr-hosted</id>
       <username>${env.HARBOR_USERNAME}</username>

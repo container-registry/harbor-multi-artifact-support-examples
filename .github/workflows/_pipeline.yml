@@ -246,4 +246,5 @@ jobs:
           # A cold local repository, so a hit proves the jar came back over the network.
           mvn -B -s apps/todo-api/.mvn/settings.xml -Dmaven.repo.local="$(mktemp -d)" \
             dependency:get -Dtransitive=false \
+            -DremoteRepositories="8gcr-hosted::default::$MAVEN_HOSTED" \
             -Dartifact="com.containerregistry.todo:todo-api:${{ needs.maven.outputs.version }}"

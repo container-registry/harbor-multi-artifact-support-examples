@@ -49,7 +49,7 @@ flowchart LR
 | Project | Kind | Clients use it for |
 |---|---|---|
 | `maven-central` | proxy cache of Maven Central, read-only, public | Maven mirror (`mirrorOf *,!8gcr-hosted`) |
-| `todomvc-maven` | hosted, public | Maven `distributionManagement` and the `8gcr-hosted` repository |
+| `todomvc-maven` | hosted, public | Maven `distributionManagement` (id `8gcr-hosted`) |
 | `npmjs` | proxy cache of npmjs.org, read-only, public | `.npmrc` `registry=` |
 | `todomvc-npm` | hosted, public | `.npmrc` `@todomvc:registry=` |
 | `todomvc` | multi-project, private | push and pull of images and the Helm chart; base images through it |

@@ -44,8 +44,7 @@
     </dependency>
   </dependencies>
 
-  <!-- Publishing target: the hosted project. The id matches the <server> and the
-       hosted <repository> in .mvn/settings.xml. -->
+  <!-- Publishing target: the hosted project. The id matches the <server> in .mvn/settings.xml. -->
   <distributionManagement>
     <repository>
       <id>8gcr-hosted</id>
