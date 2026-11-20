@@ -1,6 +1,6 @@
-# Since Kubernetes 1.34 the node authorizer only lets a kubelet mint service
-# account tokens for audiences it has been granted. Without this the kubelet
-# cannot request the demo.container-registry.com token for the credential provider.
+# The node authorizer only lets a kubelet mint service account tokens for
+# audiences it has been granted. Without this the credential provider gets
+# "not authorized to request tokens for audience" (verified on 1.37).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

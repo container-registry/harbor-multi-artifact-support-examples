@@ -34,35 +34,11 @@ npm run preview
 
 ## Registry
 
-The committed `.npmrc` resolves dependencies through Harbor:
+The committed `.npmrc` resolves every package through the `todomvc-npm`
+project on the demo; see [docs/03](../../docs/03-maven-and-npm.md#npm). The
+lockfile's `resolved` URLs name `registry.npmjs.org`, and npm rewrites them to
+the configured registry.
 
-```
-registry=https://8gcr.container-registry.dev/npm/todomvc-npm/
-always-auth=true
-```
-
-CI injects credentials as `//8gcr.container-registry.dev/npm/todomvc-npm/:_auth=<base64 user:pass>`.
-Harbor accepts Basic `_auth` only, **not** `_authToken`.
-
-`package-lock.json` was generated against npmjs.org, so its `resolved` fields name
-`registry.npmjs.org`. That is fine: npm rewrites the host of a default-registry
-`resolved` URL to whatever registry is configured, so `npm ci` under this `.npmrc`
-still fetches every tarball through Harbor (verified by pointing `npm ci` at an
-unreachable registry: it requested every tarball from that host, not from npmjs.org).
-
-While the Harbor npm endpoint is unavailable, install straight from upstream:
-
-```sh
-npm install --registry=https://registry.npmjs.org
-```
-
-`.npmrc.example` holds the same Harbor configuration for reference.
-
-## Container
-
-```sh
-docker build --build-arg VITE_API_BASE=http://localhost:8080 -t todomvc-todo-ui .
-docker run --rm -p 8081:80 todomvc-todo-ui
-```
-
-nginx serves `dist/` and falls back to `index.html` for unknown paths.
+The API base URL comes from `VITE_API_BASE` at build time. Unset (`npm run dev`)
+it is `http://localhost:8080`; the image sets it empty, so the bundle calls
+`/api` on its own origin and nginx forwards that to `API_UPSTREAM`.

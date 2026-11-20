@@ -1,124 +1,120 @@
-# Concepts: one registry, three artifact kinds
+# 01: Concepts and project layout
 
-[← README](../README.md) · [Harbor setup →](02-harbor-setup.md)
+[README](../README.md) · [02: Registry setup →](02-registry-setup.md)
 
-This repository exists to demonstrate a single claim: one 8gcr/Harbor instance can
-be the only artifact store a project needs. The TodoMVC apps are scaffolding. What
-matters is that npm packages, Maven artifacts and container images all live in the
-same registry, are all reached over the same hostname, and are all authenticated
-the same way.
+One 8gcr instance holds everything this example builds and consumes:
+Maven and npm dependencies, the jar and the npm package it publishes, the
+container images, their base images and the Helm chart. Each format has
+exactly one URL, which every client uses for both reading and writing.
 
-Three URL shapes, one instance:
+| Format | URL | Project | Clients |
+|---|---|---|---|
+| Maven | `https://demo.container-registry.com/maven/todomvc-maven` | `todomvc-maven` | `mvn` via `settings.xml` |
+| npm | `https://demo.container-registry.com/npm/todomvc-npm/` | `todomvc-npm` | `npm` via `.npmrc` |
+| OCI: images, chart, base images | `demo.container-registry.com/todomvc/...` | `todomvc` | `docker`, `helm`, Flux, kubelet |
 
-| Artifact kind | Endpoint | Project used here |
-|---|---|---|
-| npm packages | `https://8gcr.container-registry.dev/npm/todomvc-npm/` | `todomvc-npm` |
-| Maven artifacts | `https://8gcr.container-registry.dev/maven/todomvc-maven` | `todomvc-maven` |
-| Container images | `https://8gcr.container-registry.dev/v2/` (the usual OCI path) | `todomvc` |
+## Two kinds of project, and the multi-project
 
-## Native hosting versus proxy cache
+**Proxy cache.** A project bound to a *registry endpoint* (an upstream such as
+npmjs.org) serves what it holds and fetches a miss from upstream, storing it
+for the next request. Created with `proxy_cache_allow_push=true`, it also
+accepts publishing, and your own package of a given name is served before the
+upstream one. Both the binding and the flag are fixed at creation.
 
-A Harbor project is one of two things with respect to a given package format.
+**Multi-project** (new in 2.16, beta). A project created with
+`metadata.multi_project=true` that references other projects as ranked
+*sub-projects*. A pull resolves in this order:
 
-**Native (hosted).** The project stores artifacts you pushed to it. Nothing else
-is there. This is what a plain Harbor project has always been for container
-images.
+1. the multi-project's own content,
+2. each sub-project by rank, and for a proxy-cache sub-project also its upstream.
 
-**Proxy cache.** The project is bound at creation time to a *registry endpoint*,
-which is an upstream such as `registry.npmjs.org` or `repo1.maven.org/maven2`. A
-request for something the project does not hold is fetched from that upstream,
-streamed to the client, and stored locally so the next request is served without
-leaving the instance.
-
-The binding is the `registry_id` field on the project. A project created without
-it is native only, and a project created with it is a proxy cache. See
-[02-harbor-setup.md](02-harbor-setup.md) for the exact API calls.
-
-## The precedence rule
-
-For a proxy-cache project, a read is resolved in this order:
-
-1. **Native storage is checked first.** If the project already holds the artifact,
-   whether because it was previously cached or because somebody published it, that
-   copy is served. Your own package always wins over an upstream package of the
-   same name.
-2. **On a miss, upstream is queried.** The response is streamed back to the client
-   as it arrives, so the client does not wait for the whole caching cycle.
-3. **Caching is best effort.** Storing the fetched artifact happens alongside the
-   response. A failure to store does not fail the client request; it only means
-   the next request is another miss.
+Pushes always land in the multi-project itself. Authorization is checked
+against the multi-project only, so a client that may pull from `todomvc` reads
+sub-project content through it without any grant on the sub-project.
 
 ```mermaid
-flowchart TD
-    A["Client: GET /npm/todomvc-npm/left-pad"] --> B{"Project bound to an upstream endpoint?"}
-    B -- "no (native project)" --> C{"Present locally?"}
-    C -- yes --> D["Serve local copy"]
-    C -- no --> E["404"]
-    B -- "yes (proxy cache)" --> F{"Present locally?"}
-    F -- "yes (hit)" --> D
-    F -- "no (miss)" --> G["Fetch from upstream<br/>registry.npmjs.org"]
-    G --> H["Stream response to client"]
-    G -.-> I["Store locally<br/>(best effort, off the request path)"]
+flowchart LR
+    C["docker / helm / Flux / kubelet<br/>demo.container-registry.com/todomvc/..."] --> M["todomvc<br/>multi-project, private"]
+    M -- "1. own content<br/>todo-api, todo-ui, charts/todomvc" --> M
+    M -- "2. rank 1<br/>library/nginx, library/maven ..." --> D["dockerhub<br/>proxy cache of Docker Hub"]
+    D --> H[(Docker Hub)]
 ```
 
-Rule 1 is the one with consequences. It means a proxy-cache project is not merely
-a read-through mirror; it is a namespace in which your own artifacts and upstream
-artifacts coexist, and yours shadow theirs.
+## The layout, and why
 
-## Why `proxy_cache_allow_push` matters
+```
+todomvc         multi-project, private   app images + Helm chart; sub-project: dockerhub (rank 1)
+dockerhub       proxy cache, private     Docker Hub, reachable only through todomvc
+todomvc-maven   proxy cache, public      Maven Central + the published jar
+todomvc-npm     proxy cache, public      npmjs.org + the published package
+```
 
-By default a proxy-cache project is read-only to clients. Publishing into it is
-refused, because the project's contents are supposed to be a faithful reflection
-of upstream.
+**OCI: one multi-project.** The CI pushes `todo-api`, `todo-ui` and
+`charts/todomvc` to `todomvc`, and the Dockerfiles take their base images from
+`todomvc/library/...`, which the multi-project serves from its `dockerhub`
+sub-project. One URL covers the app and everything it is built on, and one
+pull grant (`todomvc`) is all Flux and the kubelet need. A separate hosted
+sub-project for the app images would add a second push URL and nothing else,
+because pushes to a multi-project stay in the multi-project and always win
+over sub-project content.
 
-Setting `proxy_cache_allow_push=true` at creation time lifts that restriction. The
-project keeps caching from upstream *and* accepts your pushes. That is what lets
-`todomvc-npm` be the single value of `registry=` in `.npmrc`: the same URL resolves
-`vue` from npmjs.org and `todomvc-todo-ui` from local storage. Without it you would
-need two npm registries configured, a proxy for reads and a hosted one for writes,
-and every consumer would need both.
+**Maven and npm: one proxy-cache project each, not a multi-project.** In 2.16.0
+multi-project resolution exists only on the OCI routes (`/v2/.../manifests`
+and `/v2/.../blobs`). The npm and Maven handlers do not consult sub-projects.
+The API still accepts a package proxy as a sub-project, so this is easy to get
+wrong. Measured on the demo:
 
-The flag is **create-only**. Harbor does not accept it on an update, so a project
-created without it has to be deleted and recreated. Decide before you create.
+```console
+$ curl -s -u "admin:$PASS" -X POST "$API/projects" -H 'Content-Type: application/json' \
+    -d '{"project_name":"probe-multi-npm","metadata":{"public":"true","multi_project":"true"}}' -w '%{http_code}\n'
+201
+$ curl -s -u "admin:$PASS" -X POST "$API/projects/probe-multi-npm/subprojects" -H 'Content-Type: application/json' \
+    -d '{"sub_project_name":"todomvc-npm","rank":1}' -w '%{http_code}\n'
+201
+$ curl -s -w ' %{http_code}\n' https://demo.container-registry.com/npm/probe-multi-npm/vue
+{"error":"package not found"} 404
+$ curl -s -o /dev/null -w '%{http_code}\n' https://demo.container-registry.com/npm/todomvc-npm/vue
+200
+```
 
-## Why container images need their own project
+A proxy-cache project with `proxy_cache_allow_push=true` already gives the
+one-URL property for a package format: it hosts what you publish and proxies
+the rest. That is what `todomvc-maven` and `todomvc-npm` are.
 
-Container images do not go into `todomvc-npm` or `todomvc-maven`. They go into a
-third, plain project, `todomvc`.
+**Why the package projects are public.** `docker build` resolves the npm and
+Maven dependencies inside the image build, where no credential is passed in.
+Public projects let those builds stay credential-free. The `todomvc`
+multi-project is private, so the Kubernetes side of the flow has to
+authenticate, and the walkthrough shows that it does.
 
-A project bound to a package-format registry endpoint is a package project, and
-Harbor's package policy validation (`pkgpolicy.ValidateOCIPush`) rejects an OCI
-manifest push into it. The reason is that the two content models do not mix
-safely inside one namespace: an npm proxy-cache project derives its repository
-names and version tags from the package format, and an OCI push would create
-repositories in the same namespace under rules that format does not describe.
+**Why images do not go into the package projects.** A project bound to a
+package-format endpoint refuses OCI manifest pushes.
 
-So the layout is: one project per package format that you proxy, plus one ordinary
-project for images. All three sit on the same instance, under the same hostname,
-behind the same credential.
+## One credential mechanism everywhere
 
-## One credential for all three
+Nothing stores a registry password. Every client presents a short-lived OIDC
+token as the HTTP Basic password, with any username (`jwt` by convention).
+Harbor validates the token against a *trusted issuer* and maps its claims to a
+*secretless robot*:
 
-Nothing in the pipeline stores a registry password. GitHub Actions mints an OIDC
-JWT, and that JWT is used directly as the HTTP Basic password against all three
-endpoints. There is no token-exchange step. See
-[05: Images and keyless auth](../images/README.md) for how Harbor turns that JWT into a robot
-account, and [06-pipeline.md](06-pipeline.md) for where it is used.
+| Who | Token | Trusted issuer | Robot | Can |
+|---|---|---|---|---|
+| GitHub Actions, push and manual runs | GitHub OIDC | `github-actions` (online JWKS) | `todomvc-ci` | push and pull all three projects |
+| GitHub Actions, pull requests | GitHub OIDC | `github-actions` | `todomvc-ci-pr` | pull only |
+| Flux and kubelet in the kind cluster | Kubernetes ServiceAccount token | `kind-todomvc` (offline, pinned JWKS) | `todomvc-k8s` | pull `todomvc` |
 
-| Client | How the credential is supplied |
+The token's `aud` must equal the trusted issuer's audience. Here that is the
+registry host, `demo.container-registry.com`, so a token minted for any other
+service is useless against this registry.
+
+| Client | How the token is passed |
 |---|---|
-| npm | `_auth=<base64 of "user:password">` in `.npmrc`. `_authToken` does **not** work. |
-| Maven | `<server>` entry in `settings.xml`, id matching the mirror and the deployment repository |
-| Docker | `docker login -u jwt --password-stdin` |
-
-In all three cases the username is ignored by Harbor when the password is a JWT.
-This repository uses `jwt` by convention.
+| npm | `_auth=<base64 of "jwt:<token>">` in `.npmrc`. `_authToken` (Bearer) is not accepted. |
+| Maven | `<server>` with id `8gcr`, matching the mirror and `distributionManagement` |
+| docker, helm | `login -u jwt --password-stdin` |
+| Flux source-controller | ServiceAccount annotations, `credential.auth.fluxcd.io/username: jwt` |
+| kubelet | KEP-4412 credential provider returning `jwt` + the pod's ServiceAccount token |
 
 ## Next
 
-- [02-harbor-setup.md](02-harbor-setup.md): provisioning the endpoints, projects, IdP and robot
-- [03: npm](../npm/README.md): npm, from `npm ci` through `npm publish` and back
-- [04: Maven](../maven/README.md): Maven, the same round trip
-- [05: Images and keyless auth](../images/README.md): keyless image push and pull
-- [06-pipeline.md](06-pipeline.md): the whole thing in CI
-- [07-local-dev.md](07-local-dev.md): the same flows against a local `task dev:up` Harbor
+[02: Registry setup](02-registry-setup.md)

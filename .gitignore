@@ -1,4 +1,4 @@
-# Agent tooling — deliberately not part of the demo
+# Agent tooling, not part of the demo
 .claude/
 
 # Java / Maven
@@ -11,19 +11,15 @@ dist/
 .npmrc.local
 *.tsbuildinfo
 
-# Local secrets — never commit registry credentials
+# Local secrets, never commit registry credentials
 .env
 .env.local
-settings-local.xml
 
 # OS / editor
 .DS_Store
 *.swp
 .idea/
 .vscode/
-
-# Homebrew client settings written by scripts/setup-homebrew.py (robot secret)
-brew.env
 
 # Python bytecode from running the scripts
 __pycache__/

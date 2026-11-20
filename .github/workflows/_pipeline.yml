@@ -62,7 +62,7 @@ jobs:
         run: |
           mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ needs.version.outputs.version }}" -DgenerateBackupPoms=false
           mvn -B -s .mvn/settings.xml verify
-      # A fresh token: GitHub's expires within minutes, and the build above can outlast it.
+      # A fresh token: GitHub's is valid for 5 minutes, and the build above can outlast it.
       - id: auth-publish
         if: inputs.publish
         uses: ./.github/actions/8gcr-token
@@ -145,12 +145,22 @@ jobs:
           tags: |
             ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
             ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ needs.version.outputs.version }}
-      # A fresh token: GitHub's expires within minutes, and the build above can outlast it.
+      # A fresh token: GitHub's is valid for 5 minutes, and the build above can outlast it.
       - id: auth-publish
-        if: inputs.publish
         uses: ./.github/actions/8gcr-token
         with:
           audience: ${{ env.REGISTRY }}
+      - name: Pushing is refused for pull_request tokens
+        if: ${{ !inputs.publish }}
+        env:
+          HARBOR_PASSWORD: ${{ steps.auth-publish.outputs.password }}
+          IMAGE: ${{ env.OCI_PROJECT }}/${{ matrix.app }}
+        run: |
+          printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u jwt --password-stdin
+          if docker push "$IMAGE:${{ github.sha }}"; then
+            echo "::error::a pull_request token was allowed to push"; exit 1
+          fi
+          echo "Push with the pull_request token was refused, as intended." >> "$GITHUB_STEP_SUMMARY"
       - name: Push
         if: inputs.publish
         env:

@@ -1,132 +1,94 @@
-# 8gcr Harbor registry for npm, Maven and container images
+# One registry, keyless, from source to cluster
 
-A working example of using a single [8gcr](https://container-registry.com/8gcr) / Harbor
-instance as the only artifact store a project needs:
+A working end-to-end example of [8gcr](https://container-registry.com/8gcr)
+(Harbor Next 2.16) as the only artifact store of a project, run against the
+public demo at `https://demo.container-registry.com`:
 
-- **proxy** npm packages from npmjs.org and Maven artifacts from Maven Central through it,
-- **publish** your own npm package and Maven jar back into Harbor,
-- **push and pull container images**,
-- From one GitHub Actions pipeline, with **no registry secret stored anywhere**.
+1. A Java/Maven backend and an npm frontend build in GitHub Actions. Every
+   dependency resolves through Harbor proxy caches of Maven Central and
+   npmjs.org, and the jar and the npm package are published back into them.
+2. Both apps are built into container images, with base images pulled
+   through Harbor's Docker Hub proxy cache, and pushed to Harbor.
+3. A Helm chart for the app is pushed to Harbor as an OCI artifact.
+4. CI authenticates with its GitHub OIDC token as the password. There is no
+   registry secret anywhere.
+5. Flux on a kind cluster installs the chart and the kubelet pulls the
+   images, both with the cluster's own ServiceAccount tokens. Still no secret.
 
-The two TodoMVC apps in `apps/` exist only to give the pipeline something real to build.
-The artifact flow, the pipeline and the guide are the point.
+The TodoMVC apps in `apps/` only exist to give the flow something real to build.
 
-![The TodoMVC app the pipeline builds](docs/images/todomvc-app.png)
+```mermaid
+flowchart LR
+    subgraph GH["GitHub Actions (OIDC token)"]
+      MVN[mvn verify / deploy]
+      NPM[npm ci / publish]
+      IMG[docker build / push]
+      CH[helm push]
+    end
+    subgraph H["demo.container-registry.com"]
+      M["/maven/todomvc-maven<br/>proxy + hosted"]
+      N["/npm/todomvc-npm/<br/>proxy + hosted"]
+      T["todomvc<br/>multi-project"]
+      D["dockerhub<br/>proxy cache"]
+    end
+    subgraph K["kind cluster (ServiceAccount token)"]
+      F[Flux OCIRepository + HelmRelease]
+      KL[kubelet]
+    end
+    MVN <--> M
+    NPM <--> N
+    IMG --> T
+    CH --> T
+    T -. sub-project .-> D
+    T --> F
+    T --> KL
+```
 
-## What you will actually see
-
-One project per ecosystem, each acting as a pull-through cache for its upstream and as a
-home for your own packages at the same time:
-
-![Projects in the registry portal](docs/images/portal-projects.png)
-
-After a build, the npm project holds both the dependencies your build pulled from
-npmjs.org and the package your pipeline published:
-
-![npm packages cached and published](docs/images/portal-npm-repositories.png)
-
-## Read it front to back
+## Read it in order
 
 | | |
 |---|---|
-| [01: Concepts](docs/01-concepts.md) | Native hosting vs proxy cache, precedence, `proxy_cache_allow_push` |
-| [02: Registry setup](docs/02-harbor-setup.md) | Endpoints, projects, federated identity, secretless robot |
-| [03: npm](npm/README.md) | Package it, publish it, proxy through it, pull it back |
-| [04: Maven](maven/README.md) | The same four steps for Maven |
-| [05: Images and keyless auth](images/README.md) | Push and pull with no stored credential |
-| [06: The pipeline](docs/06-pipeline.md) | The whole thing wired together in CI |
-| [07: Local dev](docs/07-local-dev.md) | The same flows against a local `task dev:up` Harbor |
-| [08: Homebrew](homebrew/README.md) | `brew install` on intranet machines that cannot reach Homebrew, plus your own tools |
-| [Recorded demos](docs/demos/README.md) | Every flow above, recorded end to end against a fresh instance |
+| [01: Concepts and project layout](docs/01-concepts.md) | Proxy cache, multi-project, the four projects and why |
+| [02: Registry setup](docs/02-registry-setup.md) | `scripts/setup-8gcr.py`, the API calls behind it, trusted issuer and robots |
+| [03: Maven and npm](docs/03-maven-and-npm.md) | Resolve through the proxy, publish, read back |
+| [04: CI, images and chart, keyless](docs/04-ci-keyless.md) | The GitHub Actions pipeline, base images through the multi-project, Helm as OCI |
+| [05: Flux on kind, keyless](docs/05-flux-on-kind.md) | Offline trusted issuer, Flux ServiceAccount-token auth, kubelet credential provider |
 
-## The five-minute path
-
-Provision the registry side. This is idempotent, so re-running it is safe:
+## Short path
 
 ```bash
-export HARBOR_URL=https://8gcr.container-registry.dev
-export HARBOR_USER=admin HARBOR_PASS=...
-export GITHUB_REPO=your-org/your-repo
-./scripts/setup-8gcr.py
+export HARBOR_URL=https://demo.container-registry.com HARBOR_PASS=...
+./scripts/setup-8gcr.py            # registry side and CI identity
+# push to main, or: gh workflow run publish.yml --ref <branch>
+kind create cluster --config deploy/kind/kind-config.yaml   # after building the provider, see 05
+./scripts/setup-8gcr.py kind       # trust this cluster
+kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.10.0/install.yaml
+kubectl apply -f deploy/flux/
 ```
 
-It creates two proxy-cache registry endpoints, three projects, a federated identity
-provider trusting GitHub's OIDC issuer, and a robot account that has **no secret** and can
-only be assumed by a token carrying the right claims.
-
-Then point your clients at it. npm (`apps/todo-ui/.npmrc`):
-
-```ini
-registry=https://8gcr.container-registry.dev/npm/todomvc-npm/
-always-auth=true
-```
-
-Maven (`apps/todo-api/.mvn/settings.xml`) uses a wildcard mirror so plugin downloads are
-covered too, not just dependencies:
-
-```xml
-<mirror>
-  <id>8gcr</id>
-  <mirrorOf>*</mirrorOf>
-  <url>https://8gcr.container-registry.dev/maven/todomvc-maven</url>
-</mirror>
-```
-
-Install, publish, read back. `npm run build` is not optional: `package.json` ships
-`files: ["dist"]`, `dist` is not in git, and publishing without it succeeds with an
-empty package at a version you can never reuse.
-
-```bash
-cd apps/todo-ui  && npm ci && npm run build && npm publish
-cd apps/todo-api && mvn -B -s .mvn/settings.xml deploy
-```
-
-Needs JDK 21, Maven 3.9, Node 20 and Docker. `docker build` needs none of them, since
-`apps/todo-api/Dockerfile` builds inside `maven:3.9-eclipse-temurin-21`.
-
-The setup script takes the registry URL as an argument; the clients do not. Pointing
-this repository at your own instance means editing the URL, scheme included, in five
-committed files — [06-pipeline.md](docs/06-pipeline.md#running-it-against-your-own-registry)
-step 3 lists them.
-
-## How the keyless part works
-
-There is no token exchange and no secret to rotate. The pipeline asks GitHub for an OIDC
-token and hands it straight to the registry as the HTTP Basic **password**. Harbor
-validates the signature against the trusted issuer's JWKS and matches the token's
-claims to a robot account.
-
-```yaml
-- id: auth
-  uses: ./.github/actions/8gcr-token
-  with:
-    audience: 8gcr.container-registry.dev
-
-- run: |
-    printf '%s' '${{ steps.auth.outputs.password }}' \
-      | docker login 8gcr.container-registry.dev -u jwt --password-stdin
-```
-
-The username is ignored. The token expires in minutes. Nothing is stored in
-`secrets.*`.
+**The demo is wiped every Sunday at 03:17 UTC. Rerun `./scripts/setup-8gcr.py`
+(and `kind` for a running cluster) after a reset**, then run the publish
+workflow once so there is a chart to deploy. Every account on the demo is an
+admin, so anyone can change these projects; the setup script tells you when
+something no longer matches.
 
 ## Repository layout
 
 ```
-apps/todo-api/      Spring Boot + H2 backend. The Maven artifact.
-apps/todo-ui/       Vue 3 TodoMVC frontend. The npm artifact.
-.github/workflows/  The pipeline that publishes all three artifact kinds.
-npm/                npm guide: package, publish, proxy, pull back.
-maven/              Maven guide: the same four steps for Maven.
-images/             Container images guide: keyless push and pull.
-homebrew/           Homebrew use case: guide, setup script, example tap, diagrams.
-scripts/            Idempotent registry provisioning.
-docs/               Concepts, registry setup, pipeline, local dev, recorded demos.
+apps/todo-api/        Spring Boot backend: the Maven artifact and one image
+apps/todo-ui/         Vue 3 frontend: the npm artifact and one image
+deploy/chart/todomvc/ Helm chart for both, pushed as OCI
+deploy/flux/          Namespace, ServiceAccount, OCIRepository, HelmRelease
+deploy/kind/          kind config and the kubelet credential provider
+.github/              The pipeline and the OIDC token action
+scripts/setup-8gcr.py The only provisioning step, idempotent
+docs/                 The walkthrough
 ```
 
-## Every command here was run
+Pointing this at your own instance means changing `demo.container-registry.com`
+in `apps/todo-api/pom.xml`, `apps/todo-api/.mvn/settings.xml`,
+`apps/todo-ui/.npmrc`, `.github/workflows/_pipeline.yml`,
+`deploy/chart/todomvc/values.yaml`, `deploy/flux/` and `deploy/kind/`.
 
-Each page documents what was executed against
-`https://8gcr.container-registry.dev`, with the output it produced. Where a
-behaviour is still rough, the page says so at the point where you would hit it,
-with the measurement that shows it, rather than in a separate caveats section.
+Every command in the docs was run against the demo on 2026-11-20 and the
+output shown is what it printed, trimmed.
