@@ -1,4 +1,4 @@
-# 8gcr examples: one registry for every artifact type
+# 8gcr Harbor examples: one registry for every artifact type
 
 Runnable examples for [8gears Container Registry (8gcr)](https://container-registry.com/8gcr)
 2.16 as the registry for containers, Helm charts and language packages. Each
