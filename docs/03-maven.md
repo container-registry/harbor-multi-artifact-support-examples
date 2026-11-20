@@ -65,20 +65,24 @@ The token is the password, user `jwt`. In CI that is the GitHub OIDC token
 ([6. Pipeline](07-pipeline.md)). To show the same mechanism from a workstation,
 this run used a token of a ServiceAccount `publisher` in the kind cluster of
 [7. Flux deploy](08-flux-deploy.md), which the setup script does not create.
-It was set up for this run and removed afterwards (trusted issuer 2 is
-`kind-todomvc`):
+It was set up for this run and removed afterwards:
 
 ```bash
 kubectl -n todomvc create sa publisher
-curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/robots" -d '{
-  "name":"probe-publisher","level":"system","duration":-1,"trusted_issuer_id":2,
-  "permissions":[{"kind":"project","namespace":"todomvc-maven","access":[
-      {"resource":"repository","action":"push"},{"resource":"repository","action":"pull"},
-      {"resource":"artifact","action":"read"},{"resource":"tag","action":"create"}]},
-    {"kind":"project","namespace":"todomvc-npm","access":[...same...]}]}'
-curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/trusted-issuers/2/claims" \
-  -d '{"rules":[{"robot_id":5,"claim_path":"sub","value":"system:serviceaccount:todomvc:publisher"}]}'
+ISSUER_ID=$(curl -su "admin:$HARBOR_PASS" "$API/trusted-issuers?q=name%3Dkind-todomvc" | jq '.[0].id')
+PUSH='[{"resource":"repository","action":"push"},{"resource":"repository","action":"pull"},
+       {"resource":"artifact","action":"read"},{"resource":"tag","action":"create"}]'
+ROBOT_ID=$(curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/robots" -d "{
+  \"name\":\"probe-publisher\",\"level\":\"system\",\"duration\":-1,\"trusted_issuer_id\":$ISSUER_ID,
+  \"permissions\":[{\"kind\":\"project\",\"namespace\":\"todomvc-maven\",\"access\":$PUSH},
+                   {\"kind\":\"project\",\"namespace\":\"todomvc-npm\",\"access\":$PUSH}]}" | jq .id)
+curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/trusted-issuers/$ISSUER_ID/claims" \
+  -d "{\"rules\":[{\"robot_id\":$ROBOT_ID,\"claim_path\":\"sub\",\"value\":\"system:serviceaccount:todomvc:publisher\"}]}"
 ```
+
+The robot create response carries no secret:
+`{"id":5,"name":"robot$probe-publisher","secret":null}`. This block was rerun
+as written afterwards and created the same claim for robot 6.
 
 Cold local repository, inside `maven:3.9-eclipse-temurin-21`:
 
