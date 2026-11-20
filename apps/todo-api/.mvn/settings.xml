@@ -3,24 +3,38 @@
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
 
+  <!-- Everything except the hosted repository goes through the read-only proxy of
+       Maven Central. mirrorOf=* catches plugin repositories too, which a <repositories>
+       entry in the pom would not. -->
   <mirrors>
-    <!-- mirrorOf=* instead of "central": a <repositories> block in the pom only redirects
-         dependency resolution, while plugins and their transitive dependencies keep coming
-         from the built-in central plugin repository. The wildcard mirror is the only place
-         that catches both, so every byte of the build passes through the Harbor proxy cache. -->
     <mirror>
-      <id>8gcr</id>
-      <name>todomvc-maven on 8gcr</name>
-      <mirrorOf>*</mirrorOf>
-      <url>https://demo.container-registry.com/maven/todomvc-maven</url>
+      <id>8gcr-proxy</id>
+      <mirrorOf>*,!8gcr-hosted</mirrorOf>
+      <url>https://demo.container-registry.com/maven/maven-central</url>
     </mirror>
   </mirrors>
 
+  <!-- The hosted project, where CI deploys todo-api. Builds that depend on it resolve
+       it from here; the same id is the distributionManagement target in pom.xml. -->
+  <profiles>
+    <profile>
+      <id>8gcr-hosted</id>
+      <repositories>
+        <repository>
+          <id>8gcr-hosted</id>
+          <url>https://demo.container-registry.com/maven/todomvc-maven</url>
+          <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>8gcr-hosted</activeProfile>
+  </activeProfiles>
+
   <servers>
-    <!-- Same id as the mirror above AND as distributionManagement/repository in pom.xml,
-         so this one entry authenticates both pull and push. -->
     <server>
-      <id>8gcr</id>
+      <id>8gcr-hosted</id>
       <username>${env.HARBOR_USERNAME}</username>
       <password>${env.HARBOR_PASSWORD}</password>
     </server>

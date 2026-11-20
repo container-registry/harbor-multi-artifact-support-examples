@@ -6,10 +6,10 @@
 
 The default run creates, idempotently:
   1. proxy-cache endpoints for npmjs.org, Maven Central and Docker Hub
-  2. projects todomvc-npm and todomvc-maven: proxy cache that also accepts publishing
-  3. project dockerhub: proxy cache of Docker Hub
+  2. read-only proxy-cache projects npmjs, maven-central and dockerhub
+  3. hosted projects todomvc-npm and todomvc-maven for what CI publishes
   4. multi-project todomvc: holds the app images and the Helm chart, and resolves
-     anything it does not hold through its sub-project dockerhub
+     anything it does not hold through its sub-project dockerhub (OCI only)
   5. trusted issuer for GitHub Actions OIDC, audience = registry host
   6. two secretless robots: todomvc-ci (push) for this repository's main branch,
      and todomvc-ci-pr (pull only) for its pull_request runs
@@ -38,10 +38,12 @@ GITHUB_OIDC = "https://token.actions.githubusercontent.com"
 ENDPOINTS = [("npmjs", "npm", "https://registry.npmjs.org"),
              ("maven-central", "maven", "https://repo1.maven.org/maven2"),
              ("dockerhub", "docker-hub", "https://hub.docker.com")]
-# (project, endpoint, public, accepts publishing)
-PROXY_PROJECTS = [("todomvc-npm", "npmjs", True, True),
-                  ("todomvc-maven", "maven-central", True, True),
-                  ("dockerhub", "dockerhub", False, False)]
+# (project, endpoint, public). Read-only: publishing into a proxy cache is going
+# away (8gcr #658), so what CI publishes goes into HOSTED_PROJECTS instead.
+PROXY_PROJECTS = [("npmjs", "npmjs", True), ("maven-central", "maven-central", True),
+                  ("dockerhub", "dockerhub", False)]
+# Public so `docker build`, which gets no credential, can resolve from them too.
+HOSTED_PROJECTS = ["todomvc-npm", "todomvc-maven"]
 MULTI_PROJECT = "todomvc"
 SUB_PROJECTS = [("dockerhub", 1)]
 CI_ISSUER = "github-actions"
@@ -117,23 +119,27 @@ def ensure_endpoints(h):
 
 
 def ensure_projects(h, endpoint_ids):
-    say("Proxy-cache projects")
-    for name, endpoint, public, allow_push in PROXY_PROJECTS:
+    say("Proxy-cache projects (read-only)")
+    for name, endpoint, public in PROXY_PROJECTS:
         rid = endpoint_ids[endpoint]
-        meta = {"public": str(public).lower()}
-        if allow_push:
-            meta["proxy_cache_allow_push"] = "true"
-        p = h.project(name, {"registry_id": rid, "metadata": meta})
+        want = str(public).lower()
+        p = h.project(name, {"registry_id": rid, "metadata": {"public": want}})
         got = p.get("metadata") or {}
-        # registry_id and proxy_cache_allow_push are fixed at creation, so a mismatch cannot be patched.
-        if p.get("registry_id") != rid or (got.get("proxy_cache_allow_push") == "true") != allow_push:
-            die(f"project {name} must proxy registry {rid} with publishing "
-                f"{'allowed' if allow_push else 'refused'}. Delete it and re-run.")
-        if got.get("public") != meta["public"]:
-            die(f"project {name} has public={got.get('public')}, expected {meta['public']}. "
+        # registry_id is fixed at creation, so a mismatch cannot be patched.
+        if p.get("registry_id") != rid or got.get("proxy_cache_allow_push") == "true":
+            die(f"project {name} must be a read-only proxy cache of registry {rid}. Delete it and re-run.")
+        if got.get("public") != want:
+            die(f"project {name} has public={got.get('public')}, expected {want}. "
                 "Change it under Project -> Configuration and re-run.")
-        ok(f"project {name} (proxy cache of {endpoint}, public={meta['public']}, "
-           f"publishing {'allowed' if allow_push else 'refused'})")
+        ok(f"project {name} (proxy cache of {endpoint}, public={want})")
+
+    say("Hosted projects")
+    for name in HOSTED_PROJECTS:
+        p = h.project(name, {"metadata": {"public": "true"}})
+        meta = p.get("metadata") or {}
+        if p.get("registry_id") or meta.get("multi_project") == "true" or meta.get("public") != "true":
+            die(f"project {name} must be a plain public project. Delete or fix it and re-run.")
+        ok(f"project {name} (hosted, public)")
 
     say("Multi-project")
     p = h.project(MULTI_PROJECT, {"metadata": {"public": "false", "multi_project": "true"}})
@@ -233,18 +239,20 @@ def setup_ci(h, url, audience, repo):
         "offline_validation": False}, audience)
     say("Secretless robots for CI")
     push = ensure_robot(h, "todomvc-ci", "Keyless CI publishing (GitHub Actions)", issuer_id,
-                        grant(PUSH, MULTI_PROJECT, "todomvc-npm", "todomvc-maven"))
+                        grant(PUSH, MULTI_PROJECT, *HOSTED_PROJECTS))
     # Only main may push. A pull_request token carries refs/pull/<n>/merge and never matches.
     ensure_claims(h, issuer_id, push, {"repository": repo, "ref": "refs/heads/main"})
     pr = ensure_robot(h, "todomvc-ci-pr", "Keyless CI pull requests, read only (GitHub Actions)",
-                      issuer_id, grant(PULL, MULTI_PROJECT, "todomvc-npm", "todomvc-maven"))
+                      issuer_id, grant(PULL, MULTI_PROJECT, *HOSTED_PROJECTS))
     ensure_claims(h, issuer_id, pr, {"repository": repo, "event_name": "pull_request"})
     say("Done")
     host = urllib.parse.urlsplit(url).netloc
+    # v2.16.0 serves packages under /npm/ and /maven/; later builds move them to /pkg/<format>/.
+    pkg = url + os.environ.get("PKG_ROOT", "")
     print(f"    images, chart -> {host}/{MULTI_PROJECT}/{{todo-api,todo-ui,charts/todomvc}}\n"
           f"    base images   -> {host}/{MULTI_PROJECT}/library/<image> (via dockerhub)\n"
-          f"    npm           -> {url}/npm/todomvc-npm/\n"
-          f"    Maven         -> {url}/maven/todomvc-maven\n"
+          f"    npm           -> resolve {pkg}/npm/npmjs/, publish @todomvc/* to {pkg}/npm/todomvc-npm/\n"
+          f"    Maven         -> mirror {pkg}/maven/maven-central, deploy to {pkg}/maven/todomvc-maven\n"
           f"    CI auth       -> GitHub OIDC token, audience {audience}, repository {repo}")
 
 

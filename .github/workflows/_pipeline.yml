@@ -18,8 +18,11 @@ on:
 
 env:
   REGISTRY: demo.container-registry.com
-  NPM_URL: https://demo.container-registry.com/npm/todomvc-npm/
-  MAVEN_URL: https://demo.container-registry.com/maven/todomvc-maven
+  # Hosted projects that CI publishes into. Resolution goes through the read-only
+  # proxies named in apps/todo-ui/.npmrc and apps/todo-api/.mvn/settings.xml.
+  # v2.16.0 serves /npm/ and /maven/; later builds move them to /pkg/npm/ and /pkg/maven/.
+  NPM_HOSTED: https://demo.container-registry.com/npm/todomvc-npm/
+  MAVEN_HOSTED: https://demo.container-registry.com/maven/todomvc-maven
   # The multi-project: app images, the Helm chart, and Docker Hub through its sub-project.
   OCI_PROJECT: demo.container-registry.com/todomvc
 
@@ -45,7 +48,7 @@ jobs:
         uses: ./.github/actions/8gcr-token
         with:
           audience: ${{ env.REGISTRY }}
-      - name: Build through the todomvc-maven proxy cache
+      - name: Build through the maven-central proxy cache
         env:
           HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
@@ -65,7 +68,7 @@ jobs:
           HARBOR_PASSWORD: ${{ steps.auth-publish.outputs.password }}
         run: |
           mvn -B -s .mvn/settings.xml deploy -DskipTests
-          echo "Published \`com.containerregistry.todo:todo-api:${{ steps.version.outputs.version }}\` to $MAVEN_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published \`com.containerregistry.todo:todo-api:${{ steps.version.outputs.version }}\` to $MAVEN_HOSTED" >> "$GITHUB_STEP_SUMMARY"
 
   npm:
     runs-on: ubuntu-latest
@@ -94,8 +97,8 @@ jobs:
           # Harbor reads HTTP Basic from _auth; _authToken is not accepted.
           auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
           echo "::add-mask::$auth"
-          echo "//${NPM_URL#https://}:_auth=$auth" >> .npmrc
-      - name: Install through the todomvc-npm proxy cache
+          echo "//${NPM_HOSTED#https://}:_auth=$auth" >> .npmrc
+      - name: Install through the npmjs proxy cache
         run: npm ci
       - run: npm run build
       - name: Publish the package
@@ -103,7 +106,7 @@ jobs:
         run: |
           npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
           npm publish
-          echo "Published \`todomvc-todo-ui@${{ steps.version.outputs.version }}\` to $NPM_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published \`@todomvc/todo-ui@${{ steps.version.outputs.version }}\` to $NPM_HOSTED" >> "$GITHUB_STEP_SUMMARY"
 
   images:
     runs-on: ubuntu-latest
@@ -228,8 +231,10 @@ jobs:
           auth="$(printf 'jwt:%s' "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
           echo "::add-mask::$auth"
           cd "$(mktemp -d)"
-          printf 'registry=%s\n//%s:_auth=%s\n' "$NPM_URL" "${NPM_URL#https://}" "$auth" > .npmrc
-          npm view "todomvc-todo-ui@${{ needs.npm.outputs.version }}" name version dist.tarball
+          # The committed .npmrc plus the credential: the scope resolves from the hosted project.
+          cp "$GITHUB_WORKSPACE/apps/todo-ui/.npmrc" .
+          echo "//${NPM_HOSTED#https://}:_auth=$auth" >> .npmrc
+          npm view "@todomvc/todo-ui@${{ needs.npm.outputs.version }}" name version dist.tarball
       - name: Maven artifact
         env:
           HARBOR_USERNAME: jwt

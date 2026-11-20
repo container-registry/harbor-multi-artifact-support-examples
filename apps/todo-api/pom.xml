@@ -44,12 +44,12 @@
     </dependency>
   </dependencies>
 
-  <!-- Publishing target. No <repositories> block on purpose: resolution is redirected
-       by the mirrorOf=* entry in .mvn/settings.xml, which also covers plugin repositories. -->
+  <!-- Publishing target: the hosted project. The id matches the <server> and the
+       hosted <repository> in .mvn/settings.xml. -->
   <distributionManagement>
     <repository>
-      <id>8gcr</id>
-      <name>8gcr Maven</name>
+      <id>8gcr-hosted</id>
+      <name>todomvc-maven on 8gcr</name>
       <url>${harbor.url}/maven/${harbor.maven.project}</url>
     </repository>
   </distributionManagement>
