@@ -12,7 +12,7 @@ project and everything else to the proxy. See
 
 ## Prerequisites
 
-- 8gcr 2.16 with *Multi-Format Artifacts* enabled, admin credentials
+- 8gcr 2.16 with *Multi-Format Artifacts* (an opt-in commercial feature of 8gcr) enabled, admin credentials
 - Node 18+ with npm, Python 3.10+
 - On 8gcr builds newer than v2.16.0, package paths are `/pkg/npm/` instead of `/npm/`: edit `sample/.npmrc` and the `_auth` line, and run `setup.py` with `PKG_ROOT=/pkg`.
 

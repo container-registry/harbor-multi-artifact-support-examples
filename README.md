@@ -47,7 +47,8 @@ lib/harborlib.py        provisioning helpers every setup.py imports
 ## Requirements
 
 8gcr 2.16 with *Multi-Format Artifacts* enabled, and *Federated
-Robot Accounts* for the keyless examples. Setup scripts need Python 3.10+ with
+Robot Accounts* for the keyless examples. Both are opt-in commercial features of
+8gcr. Setup scripts need Python 3.10+ with
 the standard library only, and read `HARBOR_URL`, `HARBOR_USER` (default
 `admin`) and `HARBOR_PASS`. Each example lists its other tools; for instance
 the end-to-end example's `setup.py kind` also calls `kubectl`.

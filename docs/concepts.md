@@ -36,7 +36,7 @@ point clients at both:
 
 ### Multi-project
 
-New in 2.16, beta, part of the *Multi-Format Artifacts* feature. A pull
+New in 2.16, beta, part of *Multi-Format Artifacts*, an opt-in commercial feature of 8gcr. A pull
 resolves in this order:
 
 1. the multi-project's own content,

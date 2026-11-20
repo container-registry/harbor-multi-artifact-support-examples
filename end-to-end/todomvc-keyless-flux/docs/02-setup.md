@@ -11,7 +11,7 @@ create, so it is safe to rerun.
 Transcripts and `HOST` are explained under [Run the setup script](#run-the-setup-script).
 
 8gcr 2.16 with *Multi-Format Artifacts* and *Federated Robot
-Accounts* enabled:
+Accounts* enabled, both opt-in commercial features of 8gcr:
 
 ```console
 $ curl -s -u "admin:$HARBOR_PASS" $HARBOR_URL/api/v2.0/features \
