@@ -112,7 +112,18 @@ dist.tarball = 'https://demo.container-registry.com/npm/todomvc-npm/todomvc-todo
 [INFO] BUILD SUCCESS
 ```
 
-PULL_REQUEST_PLACEHOLDER
+## Pull requests can read, not push
+
+On a pull request the same jobs run with `publish: false`. The token resolves
+to `todomvc-ci-pr`, which is enough to pull base images through the private
+`todomvc` project, so the image builds still succeed. Each image job then tries
+to push with a fresh token and expects to be refused. From the run on
+[PR #12](https://github.com/container-registry/harbor-multi-artifact-support-examples/pull/12):
+
+```console
+token for aud=demo.container-registry.com event_name=pull_request ref=refs/pull/12/merge, valid 300s
+error from registry: unauthorized to access repository: todomvc/todo-api, action: push: unauthorized to access repository: todomvc/todo-api, action: push
+```
 
 ## Timings
 
