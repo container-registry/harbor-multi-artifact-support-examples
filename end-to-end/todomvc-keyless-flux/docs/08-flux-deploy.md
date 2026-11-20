@@ -205,11 +205,15 @@ mint the registry-audience token for that one account only. Rerun with it,
 `other` now fails one step earlier, in the kubelet, while `todomvc` still pulls:
 
 ```console
+$ kubectl -n todomvc run p-todomvc --image=$HOST/todomvc/todo-api:bfa6cd6... \
+    --overrides='{"spec":{"serviceAccountName":"todomvc"}}' --image-pull-policy=Always --restart=Never --command -- true
+$ kubectl -n todomvc run p-other --image=$HOST/todomvc/todo-api:bfa6cd6... \
+    --overrides='{"spec":{"serviceAccountName":"other"}}' --image-pull-policy=Always --restart=Never --command -- true
 $ kubectl -n todomvc get pod p-todomvc p-other -o custom-columns='N:.metadata.name,P:.status.phase,W:.status.containerStatuses[0].state.waiting.reason'
 N           P           W
 p-todomvc   Succeeded   <none>
 p-other     Pending     ImagePullBackOff
-$ journalctl -u kubelet | grep -o 'is not authorized to request tokens[^"]*"[^"]*"'
+$ docker exec todomvc-control-plane journalctl -u kubelet | grep -o 'is not authorized to request tokens for audience \\"[a-z.-]*\\"' | tail -1
 is not authorized to request tokens for audience \"demo.container-registry.com\"
 ```
 

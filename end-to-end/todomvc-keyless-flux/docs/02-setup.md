@@ -135,8 +135,8 @@ follows its key rotation.
 
 ```bash
 curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/trusted-issuers" \
-  -d '{"name":"github-actions","audience":"harbor.example.com","offline_validation":false,
-       "openid_config_url":"https://token.actions.githubusercontent.com/.well-known/openid-configuration"}'
+  -d "{\"name\":\"github-actions\",\"audience\":\"$HOST\",\"offline_validation\":false,
+       \"openid_config_url\":\"https://token.actions.githubusercontent.com/.well-known/openid-configuration\"}"
 ```
 
 The Kubernetes trusted issuer is created by `setup.py kind`, see

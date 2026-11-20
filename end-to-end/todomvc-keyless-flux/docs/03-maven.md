@@ -88,16 +88,8 @@ curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/
 
 The robot create response carries no secret:
 `{"id":5,"name":"robot$probe-publisher","secret":null}`. This block was rerun
-as written afterwards and created the same claim for robot 6. Remove the
-temporary identity when done; deleting the robot also deletes its claim rule:
-
-```bash
-curl -su "admin:$HARBOR_PASS" -X DELETE "$API/robots/$ROBOT_ID"
-kubectl -n todomvc delete sa publisher
-```
-
-Both robots (5 and 6) were deleted this way; afterwards `kind-todomvc` held
-only the claim of `todomvc-k8s`.
+as written afterwards and created the same claim for robot 6. It is removed again after the read-back, see
+[Remove the temporary identity](#remove-the-temporary-identity).
 
 The deploy (run while the hosted project was still configured as a
 repository, which only affects resolution):
@@ -163,6 +155,19 @@ $ mvn -B -s .mvn/settings.xml dependency:get -Dtransitive=false \
 The pipeline's `verify` job runs the same command after every publish. A
 project that does consume the jar adds `todomvc-maven` as a `<repository>`
 with id `8gcr-hosted`.
+
+### Remove the temporary identity
+
+After the deploy and the read-back (and the npm publish in [3. npm](04-npm.md),
+which uses the same identity). Deleting the robot also deletes its claim rule:
+
+```bash
+curl -su "admin:$HARBOR_PASS" -X DELETE "$API/robots/$ROBOT_ID"   # $ROBOT_ID from the setup block
+kubectl -n todomvc delete sa publisher
+```
+
+Both temporary robots (5 and 6) were deleted this way; afterwards
+`kind-todomvc` held only the claim of `todomvc-k8s`.
 
 ## The proxy cache fills less than it serves
 

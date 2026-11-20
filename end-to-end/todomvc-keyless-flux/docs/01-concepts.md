@@ -57,9 +57,11 @@ own tags, not those of its sub-projects. Measured with a pull token for
 `todomvc`:
 
 ```console
-$ curl -H "Authorization: Bearer $T" $HARBOR_URL/v2/todomvc/charts/todomvc/tags/list
+$ SA=$(kubectl -n todomvc create token todomvc --audience $HOST)      # see 7. Flux deploy
+$ tok() { curl -s -u "jwt:$SA" "$HARBOR_URL/service/token?service=harbor-registry&scope=repository:$1:pull" | jq -r .token; }
+$ curl -H "Authorization: Bearer $(tok todomvc/charts/todomvc)" $HARBOR_URL/v2/todomvc/charts/todomvc/tags/list
 {"name":"todomvc/charts/todomvc","tags":["0.1.12","0.1.13"]}
-$ curl -H "Authorization: Bearer $T" $HARBOR_URL/v2/todomvc/library/nginx/tags/list
+$ curl -H "Authorization: Bearer $(tok todomvc/library/nginx)" $HARBOR_URL/v2/todomvc/library/nginx/tags/list
 {"errors":[{"code":"NOT_FOUND","message":"repository todomvc/library/nginx not found"}]}
 ```
 
