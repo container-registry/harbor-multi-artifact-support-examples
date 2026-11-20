@@ -1,4 +1,4 @@
-# todomvc-todo-ui
+# @todomvc/todo-ui
 
 Vue 3 TodoMVC frontend, adapted from the [official TodoMVC Vue example](https://github.com/tastejs/todomvc/tree/master/examples/vue).
 `localStorage` persistence is replaced by a REST backend, and `vue-router` by a
@@ -34,8 +34,9 @@ npm run preview
 
 ## Registry
 
-The committed `.npmrc` resolves every package through the `todomvc-npm`
-project on the demo; see [docs/03](../../docs/03-maven-and-npm.md#npm). The
+The committed `.npmrc` resolves packages through the `npmjs` proxy project and
+the `@todomvc` scope through the hosted `todomvc-npm` project on the demo; see
+[docs/04-npm.md](../../docs/04-npm.md). The
 lockfile's `resolved` URLs name `registry.npmjs.org`, and npm rewrites them to
 the configured registry.
 

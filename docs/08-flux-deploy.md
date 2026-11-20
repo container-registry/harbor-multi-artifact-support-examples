@@ -1,8 +1,8 @@
-# 05: Flux on kind, keyless
+# 7. Flux deploy
 
-[← 04: CI, images and chart](04-ci-keyless.md) · [README](../README.md)
+[← 6. Pipeline](07-pipeline.md) · [README](../README.md)
 
-The chart and images from [04](04-ci-keyless.md) sit in the private `todomvc`
+The chart and images from [4](05-images.md) and [5](06-helm-chart.md) sit in the private `todomvc`
 multi-project. A kind cluster now deploys them with Flux, and nothing in the
 cluster holds a registry secret: Flux's source-controller and the kubelet both
 present a token of the ServiceAccount `todomvc/todomvc`, and Harbor maps that
@@ -47,7 +47,7 @@ in the cluster and need a controller to rotate it. With the provider, each pod
 pulls as its own ServiceAccount, so a pod running as any other account is
 refused (shown below).
 
-## 1. Build the provider and create the cluster
+## Build the provider and create the cluster
 
 ```console
 $ docker run --rm -v "$PWD/deploy/kind/credential-provider:/src" -w /src -e CGO_ENABLED=0 \
@@ -75,7 +75,7 @@ Two settings are not optional, and both were found by failing:
   `demo.container-registry.com`. Without it the kubelet log shows
   `system:node:todomvc-control-plane is not authorized to request tokens for audience "demo.container-registry.com"`.
 
-## 2. Trust the cluster in Harbor
+## Trust the cluster in Harbor
 
 A kind API server is not reachable from Harbor, and every kind cluster uses the
 same issuer URL, `https://kubernetes.default.svc.cluster.local`. So the trusted
@@ -120,7 +120,7 @@ sha256:fb4658584bd9a916ffb6f6e365f97c25cfdb2923801f551ea08356e695f14ff7
 That pull went through the multi-project to its `dockerhub` sub-project, with a
 robot that only has a grant on `todomvc`.
 
-## 3. Install Flux and the app
+## Install Flux and the app
 
 ```console
 $ kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.10.0/install.yaml
@@ -135,7 +135,11 @@ helmrelease.helm.toolkit.fluxcd.io/todomvc   True    Helm install succeeded for 
 ```
 
 The OCIRepository was ready 4 s after apply, the HelmRelease 26 s later.
-[`deploy/flux/namespace.yaml`](../deploy/flux/namespace.yaml) holds the
+The manifests are in [`deploy/flux/`](../deploy/flux):
+[`todomvc.yaml`](../deploy/flux/todomvc.yaml) holds the OCIRepository
+(`semver: ">=0.1.0-0"`, which works because the chart is the multi-project's
+own content, see [Concepts](01-concepts.md#oci-one-multi-project)) and the
+HelmRelease, and [`deploy/flux/namespace.yaml`](../deploy/flux/namespace.yaml) holds the
 annotated ServiceAccount and a Role that lets source-controller mint tokens for
 that one account. Flux 2.10 removed `serviceaccounts/token` from its default
 RBAC, so without the Role the OCIRepository cannot get a token.
@@ -173,7 +177,7 @@ todo-api-59cbb49797-7dtk5   true    demo.container-registry.com/todomvc/todo-api
 todo-ui-58c7864f97-tf7b5    true    demo.container-registry.com/todomvc/todo-ui:bfa6cd622e89eddf64c7845059ce0d64f7ac1f6f
 ```
 
-## 4. Proof that the token is what grants access
+## Proof that the token is what grants access
 
 Same node, same image, `imagePullPolicy: Always`, two ServiceAccounts:
 

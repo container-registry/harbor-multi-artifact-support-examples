@@ -1,5 +1,5 @@
 # The build and publish pipeline, called by build.yml (pull requests) and
-# publish.yml (main and manual runs). Read docs/04-ci-keyless.md alongside it.
+# publish.yml (main and manual runs). Read docs/07-pipeline.md alongside it.
 #
 # Every job authenticates with a GitHub OIDC token as the Basic password. Which
 # robot that token becomes is decided in Harbor by claim rules, not here: a
