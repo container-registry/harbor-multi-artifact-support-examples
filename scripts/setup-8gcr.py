@@ -11,8 +11,8 @@ The default run creates, idempotently:
   4. multi-project todomvc: holds the app images and the Helm chart, and resolves
      anything it does not hold through its sub-project dockerhub
   5. trusted issuer for GitHub Actions OIDC, audience = registry host
-  6. two secretless robots: todomvc-ci (push) for this repository's workflows, and
-     todomvc-ci-pr (pull only), which wins for pull_request tokens
+  6. two secretless robots: todomvc-ci (push) for this repository's main branch,
+     and todomvc-ci-pr (pull only) for its pull_request runs
 The kind run reads the cluster's issuer and signing keys with kubectl and creates
 an offline trusted issuer plus the pull-only robot todomvc-k8s for the service
 account todomvc/todomvc.
@@ -140,6 +140,9 @@ def ensure_projects(h, endpoint_ids):
     if (p.get("metadata") or {}).get("multi_project") != "true" or p.get("registry_id"):
         die(f"project {MULTI_PROJECT} exists but is not a multi-project; the flag is create-only. "
             "Delete it and re-run.")
+    # Private on purpose: the Kubernetes side has to prove it can authenticate.
+    if (p.get("metadata") or {}).get("public") != "false":
+        die(f"project {MULTI_PROJECT} is public. Make it private (Project -> Configuration) and re-run.")
     _, refs = h.call("GET", f"/projects/{MULTI_PROJECT}/subprojects")
     have = {r["sub_project_name"]: r for r in refs or []}
     for sub, rank in SUB_PROJECTS:
@@ -161,16 +164,15 @@ def ensure_issuer(h, name, body, audience):
     if issuer is None:
         h.call("POST", "/trusted-issuers", {"name": name, "audience": audience, **body}, expect=(201,))
         issuer = h.find("/trusted-issuers", name)
-    elif body.get("offline_validation"):
-        # A recreated cluster signs with new keys; replace the pinned set.
-        h.call("PUT", f"/trusted-issuers/{issuer['id']}", {"jwks_keys": body["jwks_keys"]})
-        issuer = h.find("/trusted-issuers", name)
     want_iss = body.get("issuer", GITHUB_OIDC)
     if issuer.get("issuer") != want_iss or issuer.get("audience") != audience or \
             bool(issuer.get("offline_validation")) != bool(body.get("offline_validation")):
         die(f"trusted issuer {name} is {issuer.get('issuer')} / aud {issuer.get('audience')} / "
             f"offline={issuer.get('offline_validation')}, expected {want_iss} / aud {audience}. "
             "The audience is immutable; delete it and re-run.")
+    if body.get("offline_validation"):
+        # A recreated cluster signs with new keys; replace the pinned set.
+        h.call("PUT", f"/trusted-issuers/{issuer['id']}", {"jwks_keys": body["jwks_keys"]})
     ok(f"trusted issuer {name} id={issuer['id']} {want_iss}, audience {audience}, "
        f"{'offline (pinned keys)' if body.get('offline_validation') else 'online (follows key rotation)'}")
     return issuer["id"]
@@ -203,14 +205,17 @@ def ensure_robot(h, name, desc, issuer_id, perms):
 
 def ensure_claims(h, issuer_id, robot, want):
     _, rules = h.call("GET", f"/trusted-issuers/{issuer_id}/claims?robot_id={robot['id']}")
-    have = {r["claim_path"]: r["value"] for r in rules or []}
-    if any(have.get(k, v) != v for k, v in want.items()) or set(have) - set(want):
-        die(f"robot {robot['name']} has claim rules {have}, expected {want}. "
-            "Delete its claim rules and re-run.")
+    stale = [r for r in rules or [] if want.get(r["claim_path"]) != r["value"]]
+    if stale:
+        h.call("DELETE", f"/trusted-issuers/{issuer_id}/claims", {"rules": stale})
+    have = {r["claim_path"] for r in rules or [] if r not in stale}
     missing = [{"robot_id": robot["id"], "claim_path": k, "value": v}
                for k, v in want.items() if k not in have]
     if missing:
         h.call("POST", f"/trusted-issuers/{issuer_id}/claims", {"rules": missing}, expect=(201,))
+    _, rules = h.call("GET", f"/trusted-issuers/{issuer_id}/claims?robot_id={robot['id']}")
+    if {r["claim_path"]: r["value"] for r in rules or []} != want:
+        die(f"robot {robot['name']} claim rules are {rules}, expected {want}.")
     ok(f"robot {robot['name']} id={robot['id']} <- " + ", ".join(f"{k} = {v}" for k, v in want.items()))
 
 
@@ -229,9 +234,8 @@ def setup_ci(h, url, audience, repo):
     say("Secretless robots for CI")
     push = ensure_robot(h, "todomvc-ci", "Keyless CI publishing (GitHub Actions)", issuer_id,
                         grant(PUSH, MULTI_PROJECT, "todomvc-npm", "todomvc-maven"))
-    ensure_claims(h, issuer_id, push, {"repository": repo})
-    # Two claims beat one: a pull_request token also matches todomvc-ci, and Harbor
-    # picks the robot with the most matching claims, so PR builds can only read.
+    # Only main may push. A pull_request token carries refs/pull/<n>/merge and never matches.
+    ensure_claims(h, issuer_id, push, {"repository": repo, "ref": "refs/heads/main"})
     pr = ensure_robot(h, "todomvc-ci-pr", "Keyless CI pull requests, read only (GitHub Actions)",
                       issuer_id, grant(PULL, MULTI_PROJECT, "todomvc-npm", "todomvc-maven"))
     ensure_claims(h, issuer_id, pr, {"repository": repo, "event_name": "pull_request"})

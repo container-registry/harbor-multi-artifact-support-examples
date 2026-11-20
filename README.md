@@ -58,8 +58,9 @@ flowchart LR
 
 ```bash
 export HARBOR_URL=https://demo.container-registry.com HARBOR_PASS=...
+export GITHUB_REPO=<owner>/<repo>  # your fork; the CI robots trust only this repository
 ./scripts/setup-8gcr.py            # registry side and CI identity
-# push to main, or: gh workflow run publish.yml --ref <branch>
+# push to main, or: gh workflow run publish.yml --ref main
 kind create cluster --config deploy/kind/kind-config.yaml   # after building the provider, see 05
 ./scripts/setup-8gcr.py kind       # trust this cluster
 kubectl apply -f https://github.com/fluxcd/flux2/releases/download/v2.10.0/install.yaml

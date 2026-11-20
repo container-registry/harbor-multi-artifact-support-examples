@@ -1,5 +1,9 @@
 {{- define "todomvc.image" -}}
-{{ .root.Values.image.registry }}/{{ .name }}:{{ .root.Values.image.tag | default .root.Chart.AppVersion }}
+{{- $tag := .root.Values.image.tag | default .root.Chart.AppVersion -}}
+{{- if eq $tag "unset" -}}
+{{- fail "no image tag: set image.tag, or package the chart with --app-version <commit>" -}}
+{{- end -}}
+{{ .root.Values.image.registry }}/{{ .name }}:{{ $tag }}
 {{- end }}
 
 {{- define "todomvc.labels" -}}

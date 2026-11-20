@@ -2,6 +2,7 @@ apiVersion: v2
 name: todomvc
 description: TodoMVC API and UI, deployed from images in Harbor.
 type: application
-# CI overrides both on `helm package`: version per run, appVersion = the commit the images were built from.
+# CI overrides both on `helm package`: version per run, appVersion = the commit the images
+# were built from. No image is tagged "unset", so rendering without either fails (see _helpers.tpl).
 version: 0.1.0
-appVersion: latest
+appVersion: unset

@@ -8,28 +8,36 @@ runs from two entry points:
 | Entry point | Trigger | `publish` | Token becomes |
 |---|---|---|---|
 | [`build.yml`](../.github/workflows/build.yml) | `pull_request` | false | `todomvc-ci-pr`, pull only |
-| [`publish.yml`](../.github/workflows/publish.yml) | push to `main`, `workflow_dispatch` on any branch | true | `todomvc-ci`, push and pull |
+| [`publish.yml`](../.github/workflows/publish.yml) | push to `main`, `workflow_dispatch` of `main` | true | `todomvc-ci`, push and pull |
 
-Both grant `id-token: write`. The boundary between them is not in the workflow
-files but in Harbor's claim rules ([02](02-registry-setup.md#what-it-does-as-api-calls)):
-a token whose `event_name` is `pull_request` maps to the robot that cannot push,
-whatever the pull request's build code does with it. Pull requests from forks
+Both grant `id-token: write`. The boundary that matters is in Harbor's claim
+rules ([02](02-registry-setup.md#what-it-does-as-api-calls)): only a token whose
+`ref` is `refs/heads/main` maps to the robot that can push, and a `pull_request`
+token maps to the one that can only pull, whatever the pull request's build code
+does with it. `publish.yml` also skips the job on any ref but `main`. Pull requests from forks
 get no OIDC token from GitHub, so their runs fail at the auth step.
 
 ```
-version ─┬─ maven   resolve via todomvc-maven, verify, publish jar
-         ├─ npm     resolve via todomvc-npm, build, publish package
-         ├─ images  (todo-api, todo-ui) base images via todomvc, build, push
-         │    └─ chart   helm package, push to todomvc/charts
-         └─ verify  pull images and chart, npm view, mvn dependency:get (publish only)
+maven   resolve via todomvc-maven, verify, publish jar
+npm     resolve via todomvc-npm, build, publish package
+images  (todo-api, todo-ui) base images via todomvc, build, push
+  └─ chart   helm package, push to todomvc/charts
+verify  after all four: pull images and chart, npm view, mvn dependency:get (publish only)
 ```
+
+Each publishing job computes its version (`0.1.<run_number>`, `-rc<attempt>` on
+a rerun) with [`.github/actions/version`](../.github/actions/version/action.yml).
+Release versions are immutable, and "Re-run failed jobs" does not rerun jobs
+that succeeded, so a shared version job would hand a rerun the old value.
 
 ## The token
 
 [`.github/actions/8gcr-token`](../.github/actions/8gcr-token/action.yml) asks
 GitHub for an OIDC token with the registry host as audience, masks it, and
 returns it as the password. There is no exchange step: Harbor validates the
-token itself. The action logs the claims that matter:
+token itself. The action logs the claims that matter. This line is from the
+verification run of this branch, dispatched while `todomvc-ci` still matched on
+`repository` alone; since then a branch token no longer maps to a push robot:
 
 ```console
 token for aud=demo.container-registry.com event_name=workflow_dispatch ref=refs/heads/feat/v216-e2e, valid 300s

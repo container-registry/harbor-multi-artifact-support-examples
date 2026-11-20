@@ -99,7 +99,7 @@ Harbor validates the token against a *trusted issuer* and maps its claims to a
 
 | Who | Token | Trusted issuer | Robot | Can |
 |---|---|---|---|---|
-| GitHub Actions, push and manual runs | GitHub OIDC | `github-actions` (online JWKS) | `todomvc-ci` | push and pull all three projects |
+| GitHub Actions on `main` | GitHub OIDC | `github-actions` (online JWKS) | `todomvc-ci` | push and pull all three projects |
 | GitHub Actions, pull requests | GitHub OIDC | `github-actions` | `todomvc-ci-pr` | pull only |
 | Flux and kubelet in the kind cluster | Kubernetes ServiceAccount token | `kind-todomvc` (offline, pinned JWKS) | `todomvc-k8s` | pull `todomvc` |
 

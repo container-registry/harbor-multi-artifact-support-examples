@@ -24,22 +24,10 @@ env:
   OCI_PROJECT: demo.container-registry.com/todomvc
 
 jobs:
-  # Release versions are immutable in Harbor, so every run publishes a new one.
-  # "Re-run failed jobs" keeps run_number, so the attempt is part of the version.
-  version:
+  maven:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.v.outputs.version }}
-    steps:
-      - id: v
-        run: |
-          v="0.1.${{ github.run_number }}"
-          [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-
-  maven:
-    needs: version
-    runs-on: ubuntu-latest
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         working-directory: apps/todo-api
@@ -47,6 +35,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - id: version
+        uses: ./.github/actions/version
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           java-version: '21'
@@ -60,7 +50,7 @@ jobs:
           HARBOR_USERNAME: ${{ steps.auth.outputs.username }}
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
-          mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ needs.version.outputs.version }}" -DgenerateBackupPoms=false
+          mvn -B -s .mvn/settings.xml versions:set -DnewVersion="${{ steps.version.outputs.version }}" -DgenerateBackupPoms=false
           mvn -B -s .mvn/settings.xml verify
       # A fresh token: GitHub's is valid for 5 minutes, and the build above can outlast it.
       - id: auth-publish
@@ -75,11 +65,12 @@ jobs:
           HARBOR_PASSWORD: ${{ steps.auth-publish.outputs.password }}
         run: |
           mvn -B -s .mvn/settings.xml deploy -DskipTests
-          echo "Published \`com.containerregistry.todo:todo-api:${{ needs.version.outputs.version }}\` to $MAVEN_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published \`com.containerregistry.todo:todo-api:${{ steps.version.outputs.version }}\` to $MAVEN_URL" >> "$GITHUB_STEP_SUMMARY"
 
   npm:
-    needs: version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         working-directory: apps/todo-ui
@@ -87,6 +78,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - id: version
+        uses: ./.github/actions/version
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
@@ -108,12 +101,11 @@ jobs:
       - name: Publish the package
         if: inputs.publish
         run: |
-          npm version "${{ needs.version.outputs.version }}" --no-git-tag-version
+          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
           npm publish
-          echo "Published \`todomvc-todo-ui@${{ needs.version.outputs.version }}\` to $NPM_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published \`todomvc-todo-ui@${{ steps.version.outputs.version }}\` to $NPM_URL" >> "$GITHUB_STEP_SUMMARY"
 
   images:
-    needs: version
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -122,6 +114,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - id: version
+        uses: ./.github/actions/version
       - id: auth
         uses: ./.github/actions/8gcr-token
         with:
@@ -144,7 +138,7 @@ jobs:
             BASE_REGISTRY=${{ env.OCI_PROJECT }}/library
           tags: |
             ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ github.sha }}
-            ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ needs.version.outputs.version }}
+            ${{ env.OCI_PROJECT }}/${{ matrix.app }}:${{ steps.version.outputs.version }}
       # A fresh token: GitHub's is valid for 5 minutes, and the build above can outlast it.
       - id: auth-publish
         uses: ./.github/actions/8gcr-token
@@ -172,18 +166,22 @@ jobs:
           echo "Pushed \`$IMAGE:${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   chart:
-    needs: [version, images]
+    needs: images
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - id: version
+        uses: ./.github/actions/version
       - name: Package
         # appVersion is the commit, so the chart deploys exactly the images built above.
         run: |
           helm version --short
           helm lint deploy/chart/todomvc
-          helm package deploy/chart/todomvc --version "${{ needs.version.outputs.version }}" --app-version "${{ github.sha }}"
+          helm package deploy/chart/todomvc --version "${{ steps.version.outputs.version }}" --app-version "${{ github.sha }}"
       - id: auth
         if: inputs.publish
         uses: ./.github/actions/8gcr-token
@@ -195,12 +193,12 @@ jobs:
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
         run: |
           printf '%s' "$HARBOR_PASSWORD" | helm registry login "$REGISTRY" -u jwt --password-stdin
-          helm push "todomvc-${{ needs.version.outputs.version }}.tgz" "oci://$OCI_PROJECT/charts"
-          echo "Published chart \`oci://$OCI_PROJECT/charts/todomvc:${{ needs.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          helm push "todomvc-${{ steps.version.outputs.version }}.tgz" "oci://$OCI_PROJECT/charts"
+          echo "Published chart \`oci://$OCI_PROJECT/charts/todomvc:${{ steps.version.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   # Read everything back on a clean runner. Publishing that is never read back proves nothing.
   verify:
-    needs: [version, maven, npm, images, chart]
+    needs: [maven, npm, images, chart]
     if: inputs.publish
     runs-on: ubuntu-latest
     steps:
@@ -222,7 +220,7 @@ jobs:
           printf '%s' "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u jwt --password-stdin
           printf '%s' "$HARBOR_PASSWORD" | helm registry login "$REGISTRY" -u jwt --password-stdin
           for app in todo-api todo-ui; do docker pull "$OCI_PROJECT/$app:${{ github.sha }}"; done
-          helm show chart "oci://$OCI_PROJECT/charts/todomvc" --version "${{ needs.version.outputs.version }}"
+          helm show chart "oci://$OCI_PROJECT/charts/todomvc" --version "${{ needs.chart.outputs.version }}"
       - name: npm package
         env:
           HARBOR_PASSWORD: ${{ steps.auth.outputs.password }}
@@ -231,7 +229,7 @@ jobs:
           echo "::add-mask::$auth"
           cd "$(mktemp -d)"
           printf 'registry=%s\n//%s:_auth=%s\n' "$NPM_URL" "${NPM_URL#https://}" "$auth" > .npmrc
-          npm view "todomvc-todo-ui@${{ needs.version.outputs.version }}" name version dist.tarball
+          npm view "todomvc-todo-ui@${{ needs.npm.outputs.version }}" name version dist.tarball
       - name: Maven artifact
         env:
           HARBOR_USERNAME: jwt
@@ -240,4 +238,4 @@ jobs:
           # A cold local repository, so a hit proves the jar came back over the network.
           mvn -B -s apps/todo-api/.mvn/settings.xml -Dmaven.repo.local="$(mktemp -d)" \
             dependency:get -Dtransitive=false \
-            -Dartifact="com.containerregistry.todo:todo-api:${{ needs.version.outputs.version }}"
+            -Dartifact="com.containerregistry.todo:todo-api:${{ needs.maven.outputs.version }}"

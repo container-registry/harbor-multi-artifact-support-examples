@@ -49,9 +49,11 @@ func main() {
 	}
 	// Caching the credential past the token's expiry would make later pulls 401.
 	if exp, ok := expiry(req.ServiceAccountToken); ok {
-		if d := time.Until(exp) - time.Minute; d > 0 {
-			resp.CacheDuration = d.Round(time.Second).String()
+		d := time.Until(exp) - time.Minute
+		if d < 0 {
+			d = 0 // zero: do not cache, rather than fall back to defaultCacheDuration
 		}
+		resp.CacheDuration = d.Round(time.Second).String()
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(resp); err != nil {
 		fail("encode response: %v", err)

@@ -24,6 +24,7 @@ enable_commercial_pgx_monitoring
 
 ```console
 $ export HARBOR_URL=https://demo.container-registry.com HARBOR_PASS=...
+$ export API=$HARBOR_URL/api/v2.0      # used by the curl examples below
 $ ./scripts/setup-8gcr.py
 
 ==> Target: https://demo.container-registry.com (audience: demo.container-registry.com)
@@ -47,7 +48,7 @@ $ ./scripts/setup-8gcr.py
   ok trusted issuer github-actions id=1 https://token.actions.githubusercontent.com, audience demo.container-registry.com, online (follows key rotation)
 
 ==> Secretless robots for CI
-  ok robot robot$todomvc-ci id=1 <- repository = container-registry/harbor-multi-artifact-support-examples
+  ok robot robot$todomvc-ci id=1 <- repository = container-registry/harbor-multi-artifact-support-examples, ref = refs/heads/main
   ok robot robot$todomvc-ci-pr id=2 <- repository = container-registry/harbor-multi-artifact-support-examples, event_name = pull_request
 
 ==> Done
@@ -59,7 +60,9 @@ $ ./scripts/setup-8gcr.py
 ```
 
 On a fresh instance this took 17 s. For your own fork, set
-`GITHUB_REPO=<owner>/<repo>`.
+`GITHUB_REPO=<owner>/<repo>`. A rerun reconciles the robots' permissions and
+claim rules; the output above was captured before `todomvc-ci` gained the
+`ref` rule, which the rerun added.
 
 ## What it does, as API calls
 
@@ -109,12 +112,15 @@ curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/
 **Secretless robots and claim rules.** A robot created with
 `trusted_issuer_id` has no secret. A token becomes the robot whose claim rules
 it satisfies; when several match, the robot with the most matching rules wins.
-That is how pull requests get a read-only identity:
+Here the two CI robots never overlap:
 
-| Robot | Claim rules | A `pull_request` token | A `push` / `workflow_dispatch` token |
-|---|---|---|---|
-| `todomvc-ci` | `repository` | matches (1 rule) | matches, becomes this robot |
-| `todomvc-ci-pr` | `repository`, `event_name = pull_request` | matches (2 rules), becomes this robot | no match |
+| Robot | Claim rules | Token from a pull request | Token from `main` | Token from any other branch |
+|---|---|---|---|---|
+| `todomvc-ci` (push) | `repository`, `ref = refs/heads/main` | no match (`ref` is `refs/pull/<n>/merge`) | match | no match |
+| `todomvc-ci-pr` (pull) | `repository`, `event_name = pull_request` | match | no match | no match |
+
+A token that matches no robot authenticates as nobody, so a workflow on a
+side branch cannot push even if it mints a token.
 
 ```bash
 curl -su "admin:$HARBOR_PASS" -H 'Content-Type: application/json' -X POST "$API/trusted-issuers/1/claims" \

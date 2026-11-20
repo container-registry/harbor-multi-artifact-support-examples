@@ -1,9 +1,9 @@
-# Publish entry point: pushes to main, and manual runs on any branch of this repository.
+# Publish entry point: pushes to main, and manual runs of main.
 #
-# Starting a workflow_dispatch run needs write access to the repository, the same
-# access that pushing to main needs, so a manual run on a branch grants nothing new.
-# Harbor's claim rule (repository = this repo, any event but pull_request) decides
-# which tokens may push.
+# Two locks on the same door. The job condition below keeps a manual run on another
+# branch from publishing, and Harbor only maps tokens whose ref is refs/heads/main
+# to the push robot, so a token minted anywhere else cannot push even if a workflow
+# file on a branch drops this condition.
 
 name: publish
 
@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   pipeline:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/_pipeline.yml
     permissions:
       contents: read

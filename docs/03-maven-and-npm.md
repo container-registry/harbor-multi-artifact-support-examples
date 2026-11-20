@@ -84,8 +84,13 @@ $ curl -s $U.sha1; echo; curl -s $U | shasum -a 1
 97a15e43e50f56af712ddc3e9178fd30d7c32af8  -
 ```
 
-The pipeline's `verify` job reads the jar back with a cold local repository
-(`mvn dependency:get -Dmaven.repo.local=$(mktemp -d)`), see [04](04-ci-keyless.md).
+The pipeline's `verify` job reads the jar back through the mirror with a cold
+local repository, see [04](04-ci-keyless.md#read-back):
+
+```bash
+mvn -B -s apps/todo-api/.mvn/settings.xml -Dmaven.repo.local="$(mktemp -d)" \
+  dependency:get -Dtransitive=false -Dartifact=com.containerregistry.todo:todo-api:0.1.13
+```
 
 ## npm
 

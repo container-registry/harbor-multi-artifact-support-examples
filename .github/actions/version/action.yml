@@ -1,0 +1,20 @@
+name: Artifact version
+description: >
+  0.1.<run_number>, plus -rc<attempt> on a rerun. Release versions are immutable
+  in Harbor, so a rerun must not reuse the first attempt's version. Each publishing
+  job computes its own, because "Re-run failed jobs" does not rerun a job that
+  succeeded, and a shared version job would hand a rerun the old value.
+
+outputs:
+  version:
+    value: ${{ steps.v.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: v
+      shell: bash
+      run: |
+        v="0.1.${{ github.run_number }}"
+        [ "${{ github.run_attempt }}" = "1" ] || v="$v-rc${{ github.run_attempt }}"
+        echo "version=$v" >> "$GITHUB_OUTPUT"
