@@ -93,7 +93,7 @@ The sections follow the flow. Paths and headings are stable for linking.
 ## Short path
 
 ```bash
-export HARBOR_URL=https://demo.container-registry.com HARBOR_PASS=...
+export HARBOR_URL=https://harbor.example.com HARBOR_PASS=...   # your own instance
 export GITHUB_REPO=<owner>/<repo>  # your fork; the CI robots trust only this repository
 ./scripts/setup-8gcr.py            # projects, trusted issuer, robots
 # push to main, or: gh workflow run publish.yml --ref main
@@ -106,7 +106,9 @@ kubectl apply -f deploy/flux/
 ```
 
 `demo.container-registry.com` is a shared public demo; you can log in and look
-around. To run the flow yourself, point it at your own 8gcr instance.
+around. Every account there is an admin, so anyone can change its projects,
+trusted issuers and robots. To run the flow yourself, point it at your own 8gcr
+instance.
 
 ## Repository layout
 

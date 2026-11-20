@@ -100,7 +100,8 @@ $ ./scripts/setup-8gcr.py kind
 
 It reads `/.well-known/openid-configuration` and `/openid/v1/jwks` through
 kubectl. A recreated cluster has new keys; rerunning the command replaces the
-pinned set.
+pinned set. Run it against your own instance: on a shared one it would
+replace the keys that someone else's `kind-todomvc` issuer trusts.
 
 ![Trusted issuers](images/portal-trusted-issuers.png)
 

@@ -52,7 +52,7 @@ and in [`pom.xml`](../apps/todo-api/pom.xml):
 A cold build with this configuration, inside `maven:3.9-eclipse-temurin-21`:
 
 ```console
-$ mvn -B -s .mvn/settings.xml verify -DskipTests
+$ mvn -B -s .mvn/settings.xml verify -DskipTests | tee build.log
 ...
 [INFO] BUILD SUCCESS
 [INFO] Total time:  03:30 min
